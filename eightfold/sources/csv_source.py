@@ -36,6 +36,8 @@ def extract(path: str, source_id: str = None) -> SourceResult:
             # Use sniffer to detect tab/csv properly
             try:
                 dialect = csv.Sniffer().sniff(sample)
+                if dialect.delimiter not in (",", "\t", ";", "|"):
+                    dialect = "excel"
             except csv.Error:
                 dialect = "excel"  # Fallback
 

@@ -85,5 +85,33 @@ class TestEndToEndCustomConfig(unittest.TestCase):
         self.assertEqual(set(result.output.keys()), {"full_name", "primary_email"})
 
 
+class TestURLDiscoveryAndPriority(unittest.TestCase):
+    def test_discover_urls_from_text(self):
+        from eightfold.url_discovery import discover_urls
+        text = [
+            "Here is my resume. Contact me on linkedin: linkedin.com/in/johndoe",
+            "Or github.com/johndoe. Also check my site www.johndoe.dev/portfolio"
+        ]
+        urls = discover_urls(text)
+        self.assertEqual(urls["linkedin"], "https://linkedin.com/in/johndoe")
+        self.assertEqual(urls["github"], "https://github.com/johndoe")
+        self.assertEqual(urls["portfolio"], "https://www.johndoe.dev/portfolio")
+
+    def test_source_priority_ranking(self):
+        from eightfold.merge import _source_rank
+        # Resume is highest priority
+        self.assertEqual(_source_rank("resume.pdf", []), 0)
+        # LinkedIn is next
+        self.assertEqual(_source_rank("linkedin_apify", []), 1)
+        # GitHub is next
+        self.assertEqual(_source_rank("github_apify", []), 2)
+        # ATS JSON is next
+        self.assertEqual(_source_rank("candidate.json", []), 3)
+        # CSV is next
+        self.assertEqual(_source_rank("recruiter.csv", []), 4)
+        # TXT is last
+        self.assertEqual(_source_rank("notes.txt", []), 5)
+
+
 if __name__ == "__main__":
     unittest.main()

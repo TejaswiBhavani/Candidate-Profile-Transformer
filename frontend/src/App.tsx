@@ -1,155 +1,198 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import './App.css'
 import { runPipeline } from './api/client'
 import type { PipelineResponse } from './api/types'
-import { UploadPanel } from './components/UploadPanel'
-import { ConfigSelector } from './components/ConfigSelector'
-import { RunButton } from './components/RunButton'
-import { WarningPanel } from './components/WarningPanel'
-import { CanonicalProfileView } from './components/CanonicalProfileView'
-import { ProjectionView } from './components/ProjectionView'
-import { CompareView } from './components/CompareView'
-import { Tooltip } from './components/Tooltip'
+import { DropZone } from './components/DropZone'
+import { PipelineAnimation } from './components/PipelineAnimation'
+import { CandidateHeader } from './components/CandidateHeader'
+import { SkillsSection } from './components/SkillsSection'
+import { ExperienceSection } from './components/ExperienceSection'
+import { EducationSection } from './components/EducationSection'
+import { LinksSection } from './components/LinksSection'
+import { InsightsSection } from './components/InsightsSection'
+import { TechAccordion } from './components/TechAccordion'
+import { WorkflowModal } from './components/WorkflowModal'
+import { Lightning, Search, Tools, Briefcase, Graduation, Link, Robot, Warning } from './components/Icons'
 
 function App() {
   const [files, setFiles] = useState<File[]>([])
-  const [config, setConfig] = useState('default')
   const [result, setResult] = useState<PipelineResponse | null>(null)
   const [isRunning, setIsRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showWorkflow, setShowWorkflow] = useState(false)
 
-  const sourcesCount = files.length
-  const fieldsResolved = result?.canonical ? Object.keys(result.canonical).length : 0
-  const conflictsFound = (result?.warnings?.length || 0) + (result?.validation_errors?.length || 0)
-  const confidence = conflictsFound === 0 ? '98%' : '85%'
-
-  const canRun = useMemo(() => files.length > 0 && !isRunning, [files.length, isRunning])
-
-  const onRun = async () => {
+  const onAnalyze = async () => {
     if (files.length === 0) {
-      setError('Please upload at least one source file (.csv, .txt, .json, or .pdf).')
+      setError('Please upload at least one candidate file.')
       return
     }
-
     setIsRunning(true)
     setError(null)
+    setResult(null)
     try {
-      const data = await runPipeline(files, config)
+      const data = await runPipeline(files)
       setResult(data)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Run failed')
+      setError(err instanceof Error ? err.message : 'Analysis failed')
     } finally {
       setIsRunning(false)
     }
   }
 
+  const onReset = () => {
+    setFiles([])
+    setResult(null)
+    setError(null)
+  }
+
+  const downloadJson = () => {
+    if (!result?.output) return
+    const blob = new Blob([JSON.stringify(result.output, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `candidate_profile_${result.output.candidate_id || 'output'}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const showInput = !result
+  const profile = result?.output
+
   return (
     <main className="app-shell">
-      <header className="hero-card">
-        <div className="hero-copy">
-          <h1>Candidate Profile Transformer</h1>
-          <p className="subtitle">Multi-source candidate data fusion and configurable projection engine</p>
+      {/* Navigation Bar */}
+      <nav className="navbar">
+        <div className="nav-brand" onClick={onReset} style={{ cursor: 'pointer' }}>
+          <span className="nav-logo" style={{ display: 'inline-flex', alignItems: 'center' }}>
+            <Lightning size={24} />
+          </span>
+          <span className="nav-title">Candidate Profile Transformer</span>
         </div>
-
-        <div className="pipeline-banner" aria-label="Pipeline stages">
-          <div className="pipeline-step">
-            Structured + Unstructured Sources
-            <span className="arrow">→</span>
-          </div>
-          <div className="pipeline-step">
-            Canonical Profile <Tooltip text="The internal source of truth aggregated from all incoming candidate data, retaining conflicting info and confidence scores." />
-            <span className="arrow">→</span>
-          </div>
-          <div className="pipeline-step">
-            Configurable Projection <Tooltip text="The final output shaped to consumer-specific requirements, derived from the canonical profile without altering pipeline logic." />
-            <span className="arrow">→</span>
-          </div>
-          <div className="pipeline-step">
-            Output
-          </div>
+        <div className="nav-actions">
+          <button className="btn-outline" onClick={() => setShowWorkflow(true)}>
+            View Workflow
+          </button>
+          {result && (
+            <>
+              <button className="btn-outline" onClick={downloadJson}>
+                Download JSON
+              </button>
+              <button className="btn-primary" onClick={onReset}>
+                New Analysis
+              </button>
+            </>
+          )}
         </div>
-      </header>
+      </nav>
 
-      <section className="top-grid">
-        <div className="card">
-          <div className="card-heading">
-            <h2>Upload Files</h2>
-            <p>CSV, JSON, or PDF sources in priority order.</p>
-          </div>
-          <UploadPanel files={files} onChange={setFiles} />
-        </div>
+      {/* Processing Animation Overlay */}
+      <PipelineAnimation isRunning={isRunning} />
 
-        <div className="card">
-          <div className="card-heading">
-            <h2>Config Selection</h2>
-            <p>Pick the runtime projection preset.</p>
-          </div>
-          <ConfigSelector value={config} onChange={setConfig} />
-        </div>
+      {/* Workflow Modal */}
+      <WorkflowModal isOpen={showWorkflow} onClose={() => setShowWorkflow(false)} />
 
-        <div className="card run-card">
-          <div className="card-heading">
-            <h2>Run Pipeline</h2>
-            <p>Merge candidate data, resolve conflicts, and generate configurable outputs.</p>
+      {/* ========== INPUT SCREEN ========== */}
+      {showInput && !isRunning && (
+        <section className="input-screen">
+          <div className="input-hero">
+            <h1>Analyze a Candidate</h1>
+            <p>Upload resumes, recruiter spreadsheets, ATS exports, or notes to build a unified candidate profile.</p>
           </div>
-          <RunButton onClick={onRun} disabled={!canRun} loading={isRunning} />
-          {error ? <p className="error-text">{error}</p> : <p className="helper">{files.length === 0 ? 'Please upload a candidate resume or data file to begin.' : 'Ready to run.'}</p>}
-        </div>
-      </section>
 
-      {result && (
-        <section className="metrics-row">
-          <div className="metric-box">
-            <span className="metric-label">Sources Processed</span>
-            <span className="metric-value">{sourcesCount}</span>
-          </div>
-          <div className="metric-box">
-            <span className="metric-label">Fields Resolved</span>
-            <span className="metric-value">{fieldsResolved}</span>
-          </div>
-          <div className="metric-box">
-            <span className="metric-label">Conflicts Found</span>
-            <span className="metric-value">{conflictsFound}</span>
-          </div>
-          <div className="metric-box">
-            <span className="metric-label">Overall Confidence <Tooltip text="A calculated metric indicating data reliability, based on source authority and multi-source corroboration." /></span>
-            <span className="metric-value">{confidence}</span>
-          </div>
+          <DropZone files={files} onChange={setFiles} />
+
+          {error && <p className="error-text">{error}</p>}
+
+          <button
+            className="btn-analyze"
+            onClick={onAnalyze}
+            disabled={files.length === 0 || isRunning}
+          >
+            {isRunning ? 'Analyzing...' : (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                <Search size={16} /> Analyze Candidate
+              </span>
+            )}
+          </button>
         </section>
       )}
 
-      <section className="card">
-        <div className="card-heading">
-          <h2>Execution Summary & Validation <Tooltip text="A summary of any warnings or schema validation errors caught during the pipeline run." /></h2>
-        </div>
-        <WarningPanel warnings={result?.warnings ?? []} validationErrors={result?.validation_errors ?? []} />
-      </section>
+      {/* ========== OUTPUT SCREEN ========== */}
+      {profile && (
+        <section className="output-screen">
+          {/* Candidate Header */}
+          <CandidateHeader profile={profile} />
 
-      <section className="results-grid">
-        <div className="card">
-          <div className="card-heading">
-            <h2>Canonical Profile (Internal Truth) <Tooltip text="The internal source of truth aggregated from all incoming candidate data, retaining conflicting info and confidence scores." /></h2>
-            <p>Engine truth aggregated across all sources.</p>
+          {/* Content Grid */}
+          <div className="profile-grid">
+            {/* Skills */}
+            <div className="profile-card">
+              <h3 className="card-title" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                <Tools size={20} /> Skills
+              </h3>
+              <SkillsSection skills={profile.skills} />
+            </div>
+
+            {/* Experience */}
+            <div className="profile-card">
+              <h3 className="card-title" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                <Briefcase size={20} /> Experience
+              </h3>
+              <ExperienceSection experience={profile.experience} />
+            </div>
+
+            {/* Education */}
+            <div className="profile-card">
+              <h3 className="card-title" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                <Graduation size={20} /> Education
+              </h3>
+              <EducationSection education={profile.education} />
+            </div>
+
+            {/* Links */}
+            <div className="profile-card">
+              <h3 className="card-title" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                <Link size={20} /> Links
+              </h3>
+              <LinksSection
+                urls={result.discovered_urls}
+                enrichmentStatus={result.enrichment_status}
+              />
+            </div>
           </div>
-          <CanonicalProfileView canonical={result?.canonical ?? null} />
-        </div>
 
-        <div className="card">
-          <div className="card-heading">
-            <h2>Projected Output (Config Driven) ({config}) <Tooltip text="The final output shaped to consumer-specific requirements, derived from the canonical profile without altering pipeline logic." /></h2>
-            <p>Clean JSON shaped by the selected config.</p>
+          {/* Gemini Insights */}
+          <div className="profile-card full-width">
+            <h3 className="card-title" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+              <Robot size={20} /> Recruiter AI Insights
+            </h3>
+            <InsightsSection insights={result.gemini_insights} />
           </div>
-          <ProjectionView output={result?.output ?? null} />
-        </div>
-      </section>
 
-      <section className="card compare-card">
-        <div className="card-heading">
-          <h2>Compare Configs <Tooltip text="Demonstrates how a single canonical profile can project into entirely different shapes on demand." /></h2>
-          <p>The same canonical profile can be projected into different consumer-specific schemas without changing pipeline logic.</p>
-        </div>
-        <CompareView files={files} leftConfig="default" rightConfig="public_profile" />
-      </section>
+          {/* Warnings */}
+          {result.warnings.length > 0 && (
+            <div className="profile-card full-width warnings-card">
+              <h3 className="card-title" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                <Warning size={20} /> Warnings
+              </h3>
+              <ul className="warnings-list">
+                {result.warnings.map((w, i) => (
+                  <li key={i}>{w}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Technical Details (Collapsed) */}
+          <TechAccordion
+            canonical={result.canonical}
+            output={result.output as any}
+            warnings={result.warnings}
+            provenance={profile.provenance || []}
+          />
+        </section>
+      )}
     </main>
   )
 }

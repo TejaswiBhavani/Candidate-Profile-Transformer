@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { runPipeline } from '../api/client'
-import type { JsonObject } from '../api/types'
+import type { ProfileOutput } from '../api/types'
 
 interface CompareViewProps {
   files: File[]
@@ -10,7 +10,7 @@ interface CompareViewProps {
 
 const PRESETS = ['default', 'minimal', 'public_profile', 'strict_required']
 
-function onlyInLeft(left: JsonObject | null, right: JsonObject | null): string[] {
+function onlyInLeft(left: any | null, right: any | null): string[] {
   if (!left) {
     return []
   }
@@ -21,8 +21,8 @@ function onlyInLeft(left: JsonObject | null, right: JsonObject | null): string[]
 export function CompareView({ files, leftConfig, rightConfig }: CompareViewProps) {
   const [aConfig, setAConfig] = useState(leftConfig)
   const [bConfig, setBConfig] = useState(rightConfig)
-  const [aOut, setAOut] = useState<JsonObject | null>(null)
-  const [bOut, setBOut] = useState<JsonObject | null>(null)
+  const [aOut, setAOut] = useState<ProfileOutput | null>(null)
+  const [bOut, setBOut] = useState<ProfileOutput | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 

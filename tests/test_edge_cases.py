@@ -37,6 +37,14 @@ class TestSourceRobustness(unittest.TestCase):
         self.assertTrue(any("unsupported file type" in w for w in result.warnings))
         self.assertTrue(result.ok)
 
+    def test_pdf_header_normalization_handles_split_headers(self):
+        from eightfold.sources.pdf_source import _normalize_header
+        self.assertEqual(_normalize_header("Ski lls:"), "skills")
+        self.assertEqual(_normalize_header("Ski  lls"), "skills")
+        self.assertEqual(_normalize_header("Exp erience"), "experience")
+        self.assertEqual(_normalize_header("Edu cation:"), "education")
+        self.assertEqual(_normalize_header("Hon ors & Awards"), "awards")
+
 
 class TestOnMissingPolicies(unittest.TestCase):
     def setUp(self):

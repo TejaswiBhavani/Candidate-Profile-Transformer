@@ -6,6 +6,8 @@ intentionally a thin coordinator: extraction lives in sources/, merging
 in merge.py/canonical.py, projection in project.py, validation in
 validate.py. This file just sequences them and makes sure a bad source
 degrades gracefully instead of raising.
+
+Enhanced with URL discovery, APIFY enrichment, and Gemini insights.
 """
 
 import os
@@ -15,6 +17,9 @@ from .sources import csv_source, json_source, pdf_source
 from .canonical import build_canonical_profile
 from .project import project, project_default, ProjectionError
 from .validate import validate, ValidationError, DEFAULT_OUTPUT_SCHEMA, build_schema_from_config, validate_runtime_config
+from .url_discovery import discover_urls
+from .enrichment.apify_client import enrich as apify_enrich
+from .enrichment.gemini_insights import generate_insights
 
 EXTRACTORS = {
     ".csv": csv_source.extract,
@@ -25,11 +30,15 @@ EXTRACTORS = {
 
 
 class PipelineResult:
-    def __init__(self, output, canonical, warnings, validation_errors=None):
+    def __init__(self, output, canonical, warnings, validation_errors=None,
+                 discovered_urls=None, enrichment_status=None, gemini_insights=None):
         self.output = output
         self.canonical = canonical
         self.warnings = warnings
         self.validation_errors = validation_errors or []
+        self.discovered_urls = discovered_urls or {}
+        self.enrichment_status = enrichment_status or "skipped"
+        self.gemini_insights = gemini_insights
 
     @property
     def ok(self):
@@ -49,6 +58,34 @@ def _extract_one(path):
         return SourceResult(source_id, "unknown", ok=False, error=f"unexpected error: {e}")
 
 
+def _collect_raw_texts(source_paths, source_results):
+    """Collect raw text from all sources for URL discovery."""
+    texts = []
+    for path, sr in zip(source_paths, source_results):
+        if not sr.ok:
+            continue
+        ext = os.path.splitext(path)[1].lower()
+        try:
+            if ext == ".pdf":
+                import pdfplumber
+                with pdfplumber.open(path) as pdf:
+                    for page in pdf.pages:
+                        t = page.extract_text()
+                        if t:
+                            texts.append(t)
+            elif ext in (".txt", ".csv"):
+                with open(path, "r", encoding="utf-8", errors="replace") as f:
+                    texts.append(f.read())
+            elif ext == ".json":
+                import json
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                texts.append(json.dumps(data))
+        except Exception:
+            continue
+    return texts
+
+
 def run(source_paths, config=None):
     """source_paths: list of file paths (csv/json/pdf).
     config: dict (parsed runtime config) or None for the default schema.
@@ -57,9 +94,57 @@ def run(source_paths, config=None):
     source_ids_in_order = [os.path.basename(p) for p in source_paths]
     source_results = [_extract_one(p) for p in source_paths]
 
+    # --- URL Discovery ---
+    raw_texts = _collect_raw_texts(source_paths, source_results)
+    discovered_urls = discover_urls(raw_texts)
+
+    # Convert discovered URLs into Evidence so they merge into canonical["links"]
+    url_evidence = []
+    from .models import Evidence
+    for link_type, url in discovered_urls.items():
+        if url:
+            url_evidence.append(Evidence(
+                field_name="links",
+                value={link_type: url},
+                raw_value={link_type: url},
+                source_id="url_discovery",
+                source_type="unstructured",
+                method="regex:url_discovery"
+            ))
+    if url_evidence:
+        url_sr = SourceResult(
+            source_id="url_discovery",
+            source_type="unstructured",
+            ok=True,
+            evidence=url_evidence,
+        )
+        source_results.append(url_sr)
+        source_ids_in_order.append("url_discovery")
+
+    # --- APIFY Enrichment ---
+    enrichment_result = apify_enrich(discovered_urls)
+    enrichment_status = enrichment_result.get("status", "skipped")
+
+    # If APIFY returned extra evidence, inject it as a synthetic source
+    apify_evidence = enrichment_result.get("evidence", [])
+    if apify_evidence:
+        apify_sr = SourceResult(
+            source_id="apify_enrichment",
+            source_type="semistructured",
+            ok=True,
+            evidence=apify_evidence,
+        )
+        source_results.append(apify_sr)
+        source_ids_in_order.append("apify_enrichment")
+
+    # --- Canonical Build ---
     canonical = build_canonical_profile(source_results, source_order=source_ids_in_order)
 
     warnings = []
+    if discovered_urls.get("linkedin") and not enrichment_result.get("linkedin"):
+        warnings.append("LinkedIn enrichment unavailable")
+    if discovered_urls.get("github") and not enrichment_result.get("github"):
+        warnings.append("GitHub enrichment unavailable")
     for sr in source_results:
         if not sr.ok:
             warnings.append(f"source '{sr.source_id}' skipped: {sr.error}")
@@ -101,5 +186,17 @@ def run(source_paths, config=None):
         if not (has_email or has_phone or has_skills):
             warnings.append("Profile incomplete: missing email, phone, skills")
 
-    return PipelineResult(output=output, canonical=canonical, warnings=warnings,
-                           validation_errors=validation_errors)
+    # --- Gemini Insights ---
+    gemini_insights = None
+    if output:
+        gemini_insights = generate_insights(output)
+
+    return PipelineResult(
+        output=output,
+        canonical=canonical,
+        warnings=warnings,
+        validation_errors=validation_errors,
+        discovered_urls=discovered_urls,
+        enrichment_status=enrichment_status,
+        gemini_insights=gemini_insights,
+    )

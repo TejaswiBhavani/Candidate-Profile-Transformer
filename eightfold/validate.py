@@ -102,6 +102,13 @@ DEFAULT_OUTPUT_SCHEMA = {
                 },
             },
         },
+        "location": {"type": "string"},
+        "headline": {"type": "string"},
+        "years_experience": {"type": "number"},
+        "links": {"type": "object"},
+        "education": {"type": "array"},
+        "experience": {"type": "array"},
+        "provenance": {"type": "array"},
         "overall_confidence": {"type": "number"},
     },
 }

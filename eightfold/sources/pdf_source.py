@@ -29,20 +29,23 @@ def _extract_text(path):
 # section's content at the next recognized header line, not just a
 # blank line.
 SECTION_ALIASES = {
-    "skills": ["skills", "technical skills", "core competencies", "expertise"],
+    "skills": ["skills", "technical skills", "core competencies", "expertise", "technologies"],
     "experience": ["experience", "work experience", "professional experience", "employment history", "work history"],
     "education": ["education", "academic background", "qualifications"],
     "summary": ["summary", "objective", "professional summary"],
     "projects": ["projects", "personal projects"],
-    "certifications": ["certifications", "licenses"]
+    "certifications": ["certifications", "licenses", "certificates"],
+    "awards": ["honors & awards", "honors", "awards", "honors and awards"],
+    "community": ["community", "activities"]
 }
 
 def _normalize_header(line):
     """Returns the canonical section name if found, else None."""
-    clean_line = line.strip().rstrip(":").strip().lower()
+    clean_line = re.sub(r'\s+', '', line.strip().rstrip(":").strip().lower())
     for canonical, aliases in SECTION_ALIASES.items():
-        if clean_line in aliases:
-            return canonical
+        for alias in aliases:
+            if clean_line == re.sub(r'\s+', '', alias.lower()):
+                return canonical
     return None
 
 def _is_header_line(line):
@@ -51,15 +54,18 @@ def _is_header_line(line):
 
 def _find_section(lines, canonical_name):
     """Returns the lines immediately following a section header (e.g.
-    'Skills:'), stopping at the next blank line or the next known
-    section header. Returns [] if the header isn't found."""
+    'Skills:'), stopping at the next known section header.
+    Returns [] if the header isn't found."""
     for i, line in enumerate(lines):
         if _normalize_header(line) == canonical_name:
             collected = []
             for nxt in lines[i + 1:]:
-                if not nxt.strip() or _is_header_line(nxt):
+                # Stop if we hit another header
+                if _is_header_line(nxt):
                     break
-                collected.append(nxt.strip())
+                # But do NOT stop on empty lines; just skip them
+                if nxt.strip():
+                    collected.append(nxt.strip())
             return collected
     return []
 
@@ -146,5 +152,13 @@ def extract(path: str, source_id: str = None) -> SourceResult:
                         evidence.append(Evidence("current_company", company_raw, company_raw, source_id, 
                                                  "unstructured", "heuristic:anchored_role"))
                     break # Usually the top role is current
+
+    edu_lines = _find_section(lines, "education")
+    if edu_lines:
+        for line in edu_lines:
+            line = line.strip()
+            # Simple heuristic for degree/university
+            if any(degree in line.lower() for degree in ["b.s", "bachelor", "master", "m.s", "ph.d", "doctorate", "university", "college", "institute"]):
+                evidence.append(Evidence("education", line, line, source_id, "unstructured", "heuristic:education_keyword"))
 
     return SourceResult(source_id, "unstructured", ok=True, evidence=evidence)

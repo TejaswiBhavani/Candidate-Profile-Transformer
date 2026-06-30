@@ -1,0 +1,8 @@
+{
+  "name": "eightfold-pipeline",
+  "version": "1.0.0",
+  "description": "Candidate Profile Aggregation Pipeline",
+  "scripts": {
+    "dev": "npx -y concurrently -k -n \"backend,frontend\" -c \"magenta,cyan\" \".venv\\Scripts\\python api.py\" \"npm --prefix frontend run dev\""
+  }
+}

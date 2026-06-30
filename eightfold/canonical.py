@@ -16,8 +16,38 @@ from collections import defaultdict
 from .normalize import normalize_evidence
 from .merge import merge_single_valued, merge_emails_or_phones, merge_skills
 
-SINGLE_VALUED_FIELDS = ["full_name", "current_company", "current_title", "department", "manager_name", "employment_status"]
+SINGLE_VALUED_FIELDS = [
+    "full_name", "current_company", "current_title", "department",
+    "manager_name", "employment_status", "location", "headline", "years_experience"
+]
 MULTI_VALUED_SIMPLE_FIELDS = ["emails", "phones"]
+
+
+def merge_complex_list(field_name, evidences, source_order):
+    """Picks the first non-empty list of items based on our source priority ranking."""
+    by_source = {}
+    for ev in evidences:
+        if ev.value:
+            by_source[ev.source_id] = ev.value
+
+    from .merge import _source_rank
+    sorted_sources = sorted(by_source.keys(), key=lambda s: _source_rank(s, source_order))
+    if sorted_sources:
+        return by_source[sorted_sources[0]]
+    return []
+
+
+def merge_links(evidences, source_order):
+    """Merges candidate links by unioning mapping keys, with higher priority sources overwriting."""
+    merged = {}
+    from .merge import _source_rank
+    sorted_evs = sorted(evidences, key=lambda e: _source_rank(e.source_id, source_order), reverse=True)
+    for ev in sorted_evs:
+        if isinstance(ev.value, dict):
+            for k, v in ev.value.items():
+                if v:
+                    merged[k] = v
+    return merged
 
 
 def _candidate_id(full_name_field, emails_field, phones_field):
@@ -67,17 +97,17 @@ def build_canonical_profile(source_results, source_order=None):
         canonical[f] = merge_emails_or_phones(f, by_field.get(f, []), source_order)
     canonical["skills"] = merge_skills(by_field.get("skills", []), source_order)
 
+    # Merge complex structure fields
+    canonical["education"] = merge_complex_list("education", by_field.get("education", []), source_order)
+    canonical["experience"] = merge_complex_list("experience", by_field.get("experience", []), source_order)
+    canonical["links"] = merge_links(by_field.get("links", []), source_order)
+
     # Accumulate extra_attributes
     canonical["extra_attributes"] = {}
     for ev in by_field.get("extra_attributes", []):
         for k, v in ev.value.items():
             if k not in canonical["extra_attributes"]:
                 canonical["extra_attributes"][k] = v
-
-    # experience dates: not central to the brief's example schema and only
-    # captured as supporting fields for current_title/current_company
-    # (which are merged above). We deliberately don't build a full job
-    # history / timeline reconciliation — see README "Descoped" section.
 
     candidate_id = _candidate_id(canonical["full_name"],
                                   {"value": canonical["emails"][0]["value"] if canonical["emails"] else None},
@@ -106,6 +136,12 @@ def build_canonical_profile(source_results, source_order=None):
         "department": canonical["department"],
         "manager_name": canonical["manager_name"],
         "employment_status": canonical["employment_status"],
+        "location": canonical["location"],
+        "headline": canonical["headline"],
+        "years_experience": canonical["years_experience"],
+        "links": canonical["links"],
+        "education": canonical["education"],
+        "experience": canonical["experience"],
         "skills": canonical["skills"],
         "extra_attributes": canonical["extra_attributes"],
         "overall_confidence": overall_confidence,

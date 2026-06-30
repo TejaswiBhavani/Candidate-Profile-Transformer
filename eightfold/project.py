@@ -37,6 +37,9 @@ def flatten_canonical(canonical):
         "department": canonical.get("department", {}).get("value"),
         "manager_name": canonical.get("manager_name", {}).get("value"),
         "employment_status": canonical.get("employment_status", {}).get("value"),
+        "location": canonical.get("location", {}).get("value"),
+        "headline": canonical.get("headline", {}).get("value"),
+        "years_experience": canonical.get("years_experience", {}).get("value"),
         "extra_attributes": canonical.get("extra_attributes", {}),
         "skills": [{"name": s["name"]} for s in canonical["skills"]],
         "overall_confidence": canonical["overall_confidence"],
@@ -51,6 +54,9 @@ def flatten_canonical(canonical):
         "department": canonical.get("department", {}).get("confidence"),
         "manager_name": canonical.get("manager_name", {}).get("confidence"),
         "employment_status": canonical.get("employment_status", {}).get("confidence"),
+        "location": canonical.get("location", {}).get("confidence"),
+        "headline": canonical.get("headline", {}).get("confidence"),
+        "years_experience": canonical.get("years_experience", {}).get("confidence"),
         "extra_attributes": None,
         "skills": [{"name": s["confidence"]} for s in canonical["skills"]],
         "overall_confidence": None,
@@ -65,6 +71,9 @@ def flatten_canonical(canonical):
         "department": canonical.get("department", {}).get("sources"),
         "manager_name": canonical.get("manager_name", {}).get("sources"),
         "employment_status": canonical.get("employment_status", {}).get("sources"),
+        "location": canonical.get("location", {}).get("sources"),
+        "headline": canonical.get("headline", {}).get("sources"),
+        "years_experience": canonical.get("years_experience", {}).get("sources"),
         "extra_attributes": None,
         "skills": [{"name": s["sources"]} for s in canonical["skills"]],
         "overall_confidence": None,
@@ -79,6 +88,9 @@ def flatten_canonical(canonical):
         "department": canonical.get("department", {}).get("methods", []),
         "manager_name": canonical.get("manager_name", {}).get("methods", []),
         "employment_status": canonical.get("employment_status", {}).get("methods", []),
+        "location": canonical.get("location", {}).get("methods", []),
+        "headline": canonical.get("headline", {}).get("methods", []),
+        "years_experience": canonical.get("years_experience", {}).get("methods", []),
         "extra_attributes": None,
         "skills": [{"name": s.get("methods", [])} for s in canonical["skills"]],
         "overall_confidence": None,
@@ -194,15 +206,15 @@ def project(canonical, config):
 
         out[out_key] = value
         
-        # Sibling confidence logic was requested to be removed but we need a way
-        # to handle field-level confidence if the schema requires it (like skills).
-        # We will keep confidence attached only if it's explicitly requested by 
-        # a custom projection structure (like mapping into arrays of objects).
-        
-        # Accumulate Provenance instead of sibling keys
+        if include_confidence:
+            conf_val, _ = resolve_path(confidences, source_path)
+            out[f"{out_key}_confidence"] = conf_val
+            
         if include_provenance:
             src_val, _ = resolve_path(sources, source_path)
             meth_val, _ = resolve_path(methods, source_path)
+            out[f"{out_key}_sources"] = src_val
+            out[f"{out_key}_methods"] = meth_val
             
             # Zip and add
             if isinstance(src_val, list) and isinstance(meth_val, list):
@@ -231,7 +243,13 @@ DEFAULT_FIELDS_CONFIG = {
         {"path": "candidate_id"},
         {"path": "full_name"},
         {"path": "emails"},
-        {"path": "phones"}
+        {"path": "phones"},
+        {"path": "current_company"},
+        {"path": "current_title"},
+        {"path": "department"},
+        {"path": "manager_name"},
+        {"path": "employment_status"},
+        {"path": "extra_attributes"}
     ],
     "include_confidence": False,
     "on_missing": "null",
@@ -244,11 +262,20 @@ def project_default(canonical):
     out = project(canonical, DEFAULT_FIELDS_CONFIG)
     
     # Enforce strict schema keys (null or empty arrays for missing data)
-    out["location"] = None
-    out["headline"] = None
-    out["years_experience"] = None
-    out["links"] = None
-    out["education"] = []
+    out["location"] = canonical.get("location", {}).get("value")
+    out["headline"] = canonical.get("headline", {}).get("value")
+    
+    y_exp = canonical.get("years_experience", {}).get("value")
+    if y_exp is not None:
+        try:
+            out["years_experience"] = float(y_exp)
+        except (ValueError, TypeError):
+            out["years_experience"] = y_exp
+    else:
+        out["years_experience"] = None
+        
+    out["links"] = canonical.get("links") or None
+    out["education"] = canonical.get("education") or []
     
     # Skills mapping
     out["skills"] = [
@@ -257,15 +284,19 @@ def project_default(canonical):
     ]
     
     # Experience mapping
-    out["experience"] = []
-    if canonical["current_company"]["value"] or canonical["current_title"]["value"]:
-        out["experience"].append({
-            "company": canonical["current_company"]["value"],
-            "title": canonical["current_title"]["value"],
-            "start": None,
-            "end": None,
-            "summary": None
-        })
+    exp_list = canonical.get("experience") or []
+    if exp_list:
+        out["experience"] = exp_list
+    else:
+        out["experience"] = []
+        if canonical["current_company"]["value"] or canonical["current_title"]["value"]:
+            out["experience"].append({
+                "company": canonical["current_company"]["value"],
+                "title": canonical["current_title"]["value"],
+                "start": None,
+                "end": None,
+                "summary": None
+            })
         
     out["overall_confidence"] = canonical["overall_confidence"]
     
@@ -300,6 +331,9 @@ def project_default(canonical):
     add_prov("full_name", canonical["full_name"])
     add_prov("current_company", canonical["current_company"])
     add_prov("current_title", canonical["current_title"])
+    add_prov("location", canonical.get("location"))
+    add_prov("headline", canonical.get("headline"))
+    add_prov("years_experience", canonical.get("years_experience"))
     
     for e in canonical["emails"]: add_prov("emails", e)
     for p in canonical["phones"]: add_prov("phones", p)

@@ -5,9 +5,12 @@ import os
 import tempfile
 from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
+
+load_dotenv()
 
 from eightfold.pipeline import run
 
@@ -16,7 +19,7 @@ ROOT = Path(__file__).resolve().parent
 CONFIGS_DIR = ROOT / "configs"
 
 
-app = FastAPI(title="Eightfold Pipeline API", version="1.0.0")
+app = FastAPI(title="Eightfold Pipeline API", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -39,6 +42,69 @@ def list_configs() -> dict:
         for p in sorted(CONFIGS_DIR.glob("*.json")):
             presets.append(p.stem)
     return {"presets": presets}
+
+
+@app.get("/workflow")
+def get_workflow() -> dict:
+    """Returns the pipeline stage descriptions for the workflow modal."""
+    return {
+        "stages": [
+            {
+                "id": "upload",
+                "label": "File Upload",
+                "icon": "📄",
+                "description": "Resume PDFs, recruiter CSVs, ATS JSON exports, and recruiter notes are accepted.",
+            },
+            {
+                "id": "detection",
+                "label": "Source Detection",
+                "icon": "🔍",
+                "description": "Each file is classified as structured, semi-structured, or unstructured based on its format.",
+            },
+            {
+                "id": "extraction",
+                "label": "Data Extraction",
+                "icon": "⚙️",
+                "description": "Deterministic extractors pull fields using regex, heuristics, and schema mapping — no LLMs.",
+            },
+            {
+                "id": "url_discovery",
+                "label": "URL Discovery",
+                "icon": "🔗",
+                "description": "LinkedIn, GitHub, and portfolio URLs are automatically detected from uploaded documents.",
+            },
+            {
+                "id": "enrichment",
+                "label": "APIFY Enrichment",
+                "icon": "🌐",
+                "description": "Discovered profile URLs are scraped via APIFY actors to pull additional skills, experience, and education.",
+            },
+            {
+                "id": "merge",
+                "label": "Canonical Merge",
+                "icon": "🔀",
+                "description": "All evidence from every source is merged using majority voting and conflict resolution.",
+            },
+            {
+                "id": "confidence",
+                "label": "Confidence Scoring",
+                "icon": "📊",
+                "description": "Each field receives a confidence score (0-1) based on source corroboration and authority.",
+            },
+            {
+                "id": "gemini",
+                "label": "Gemini Insights",
+                "icon": "🤖",
+                "description": "The finalized profile is analyzed by Gemini AI to generate recruiter summaries and recommendations.",
+            },
+            {
+                "id": "projection",
+                "label": "Final Profile",
+                "icon": "✅",
+                "description": "The canonical profile is projected into the requested output schema with provenance tracking.",
+            },
+        ]
+    }
 
 
 def _load_config(config_name: str | None, config_json: str | None):
@@ -98,6 +164,9 @@ async def run_pipeline(
             "validation_errors": result.validation_errors,
             "canonical": jsonable_encoder(result.canonical),
             "output": jsonable_encoder(result.output),
+            "discovered_urls": result.discovered_urls,
+            "enrichment_status": result.enrichment_status,
+            "gemini_insights": result.gemini_insights,
         }
 
 if __name__ == "__main__":

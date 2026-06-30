@@ -114,10 +114,24 @@ def merge_single_valued(field_name, evidences, source_order):
 
 
 def _source_rank(source_id, source_order):
+    sid = str(source_id).lower()
+    if sid.endswith(".pdf") or "resume" in sid:
+        return 0
+    if "linkedin_apify" in sid:
+        return 1
+    if "github_apify" in sid:
+        return 2
+    if sid.endswith(".json"):
+        return 3
+    if sid.endswith(".csv"):
+        return 4
+    if sid.endswith(".txt"):
+        return 5
+    # Fallback to source_order CLI priority
     try:
-        return source_order.index(source_id)
-    except ValueError:
-        return len(source_order)
+        return source_order.index(source_id) + 10
+    except (ValueError, TypeError):
+        return (len(source_order) if source_order else 0) + 10
 
 
 def merge_emails_or_phones(field_name, evidences, source_order):
