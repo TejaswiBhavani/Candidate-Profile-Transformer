@@ -30,19 +30,22 @@ python cli.py --sources sample_inputs/recruiter.csv sample_inputs/resume.pdf sam
 
 ### Dashboard UI
 
-You can also run the interactive web dashboard to visualize the pipeline in action.
+You can also run the interactive web dashboard to visualize the pipeline in action. Thanks to the integrated `concurrently` script, you can launch both the FastAPI backend and the React frontend with a single command!
 
 ```bash
-# Terminal 1: Start the backend API
-uvicorn api:app --reload
-
-# Terminal 2: Start the frontend development server
-cd frontend
-npm install
+# Start the full stack (backend + frontend)
 npm run dev
 ```
 
 Open `http://localhost:5173` in your browser to view the interactive candidate profile transformer.
+
+### 🤖 AI & Web Scraping Integrations
+This project uses **Apify** for live LinkedIn & GitHub extraction, and **Google Gemini** (cascading through Gemini 3.5, 2.5, 1.5, and Gemma 4 models) for unstructured Recruiter AI Insights. 
+You must supply API keys in a `.env` file at the root:
+```
+APIFY_API_TOKEN=your_apify_key
+GEMINI_API_KEY=your_gemini_key
+```
 
 No CLI flag is needed to pick structured vs. unstructured — the file
 extension routes to the right extractor (`.csv`, `.json`, `.pdf`).

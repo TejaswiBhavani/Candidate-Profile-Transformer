@@ -169,7 +169,7 @@ def build_enrichment_evidence(
                 skill_name = skill.strip()
             elif isinstance(skill, dict) and skill.get("name"):
                 skill_name = skill["name"].strip()
-            if skill_name:
+            if skill_name and len(skill_name) <= 45:
                 evidence.append(Evidence(
                     "skills", skill_name, skill_name,
                     src, "semistructured", "apify:linkedin_skills",
@@ -214,9 +214,10 @@ def build_enrichment_evidence(
     # GitHub evidence
     if github_data:
         src = "github_apify"
-        if github_data.get("name"):
+        gh_name = github_data.get("name")
+        if gh_name and "http" not in gh_name.lower() and "github.com" not in gh_name.lower():
             evidence.append(Evidence(
-                "full_name", github_data["name"], github_data["name"],
+                "full_name", gh_name, gh_name,
                 src, "semistructured", "apify:github_name",
             ))
         if github_data.get("bio"):

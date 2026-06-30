@@ -5,13 +5,14 @@ interface EducationSectionProps {
 }
 
 export function EducationSection({ education }: EducationSectionProps) {
-  if (!education || education.length === 0) {
+  const eduArray = Array.isArray(education) ? education : (education ? [education] : [])
+  if (eduArray.length === 0) {
     return <div className="section-empty">No education data available</div>
   }
 
   return (
     <div className="education-list">
-      {education.map((entry, idx) => {
+      {eduArray.map((entry, idx) => {
         if (typeof entry === 'object' && entry !== null && !Array.isArray(entry)) {
           const e = entry as Record<string, unknown>
           const degree = String(e.degree || '')

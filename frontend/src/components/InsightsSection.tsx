@@ -2,10 +2,11 @@ import { Robot, Pencil, Muscle, Target, Warning, Flag } from './Icons'
 
 interface InsightsSectionProps {
   insights: {
+    error?: string
     summary?: string
     recruiter_summary?: string
-    strengths: string[]
-    recommended_roles: string[]
+    strengths?: string[]
+    recommended_roles?: string[]
     missing_information?: string[]
     missing_info?: string[]
     potential_concerns?: string[]
@@ -21,6 +22,17 @@ export function InsightsSection({ insights }: InsightsSectionProps) {
           <Robot size={48} />
         </span>
         <p>AI insights unavailable — set GEMINI_API_KEY in .env to enable recruiter analysis.</p>
+      </div>
+    )
+  }
+
+  if (insights.error) {
+    return (
+      <div className="insights-empty" style={{ color: '#dc2626' }}>
+        <span className="insights-empty-icon" style={{ display: 'inline-flex', alignItems: 'center', color: '#dc2626' }}>
+          <Warning size={48} />
+        </span>
+        <p>{insights.error}</p>
       </div>
     )
   }

@@ -42,57 +42,89 @@ Respond with a JSON object (no markdown, no code fences) containing exactly thes
 
 def generate_insights(profile_output: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Sends the finalized profile to Gemini and returns recruiter insights.
-    Returns None on any failure (missing key, API error, parse error)."""
+    Iterates through fallback models if one fails due to quota or availability.
+    Returns None on missing key."""
     api_key = _get_api_key()
     if not api_key:
         return None
 
     try:
         from google import genai
+    except ImportError:
+        return {"error": "google-genai package is not installed."}
 
-        client = genai.Client(api_key=api_key)
+    client = genai.Client(api_key=api_key)
 
-        # Build a clean prompt with only the profile data
-        profile_text = json.dumps(profile_output, indent=2, default=str)
-        user_prompt = f"Analyze this candidate profile and generate recruiter insights:\n\n{profile_text}"
+    # Build a clean prompt with only the profile data
+    profile_text = json.dumps(profile_output, indent=2, default=str)
+    user_prompt = f"Analyze this candidate profile and generate recruiter insights:\n\n{profile_text}"
 
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=user_prompt,
-            config={
-                "system_instruction": SYSTEM_PROMPT,
-                "temperature": 0.3,
-                "response_mime_type": "application/json",
-            },
-        )
+    models_to_try = [
+        "gemini-3.5-flash",
+        "gemini-3.1-flash-lite",
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-2.0-flash",
+        "gemma-4-31b-it",
+        "gemma-4-26b-a4b-it"
+    ]
 
-        # Parse the JSON response
-        raw_text = response.text.strip()
-        # Strip markdown code fences if present
-        if raw_text.startswith("```"):
-            lines = raw_text.split("\n")
-            lines = [l for l in lines if not l.strip().startswith("```")]
-            raw_text = "\n".join(lines)
+    last_error = None
 
-        insights = json.loads(raw_text)
+    for model_name in models_to_try:
+        try:
+            response = client.models.generate_content(
+                model=model_name,
+                contents=user_prompt,
+                config={
+                    "system_instruction": SYSTEM_PROMPT,
+                    "temperature": 0.3,
+                    "response_mime_type": "application/json",
+                },
+            )
 
-        # Validate expected keys exist
-        expected_keys = {"summary", "strengths", "recommended_roles",
-                         "missing_information", "potential_concerns"}
-        if not expected_keys.issubset(set(insights.keys())):
-            # If some keys are differently named, map them or try fallback
-            mapped_insights = {
-                "summary": insights.get("summary") or insights.get("recruiter_summary") or "",
-                "strengths": insights.get("strengths") or [],
-                "recommended_roles": insights.get("recommended_roles") or [],
-                "missing_information": insights.get("missing_information") or insights.get("missing_info") or [],
-                "potential_concerns": insights.get("potential_concerns") or insights.get("concerns") or []
-            }
-            return mapped_insights
+            # Parse the JSON response
+            raw_text = response.text.strip()
+            # Strip markdown code fences if present
+            if raw_text.startswith("```"):
+                lines = raw_text.split("\n")
+                lines = [l for l in lines if not l.strip().startswith("```")]
+                raw_text = "\n".join(lines)
 
-        return insights
+            insights = json.loads(raw_text)
 
-    except Exception:
-        # Any failure: import error, API error, JSON parse error, etc.
-        # The pipeline continues without AI insights.
-        return None
+            # Validate expected keys exist
+            expected_keys = {"summary", "strengths", "recommended_roles",
+                             "missing_information", "potential_concerns"}
+            if not expected_keys.issubset(set(insights.keys())):
+                # If some keys are differently named, map them or try fallback
+                mapped_insights = {
+                    "summary": insights.get("summary") or insights.get("recruiter_summary") or "",
+                    "strengths": insights.get("strengths") or [],
+                    "recommended_roles": insights.get("recommended_roles") or [],
+                    "missing_information": insights.get("missing_information") or insights.get("missing_info") or [],
+                    "potential_concerns": insights.get("potential_concerns") or insights.get("concerns") or []
+                }
+                return mapped_insights
+
+            return insights
+
+        except Exception as e:
+            # Model failed, record error and try the next one
+            last_error = str(e)
+            print(f"Model {model_name} failed: {last_error}")
+            continue
+
+    # If all models failed, parse the last error to return to the UI
+    if last_error:
+        error_str = last_error.lower()
+        if "429" in error_str or "quota" in error_str or "exhausted" in error_str:
+            return {"error": "API Quota Exceeded across all fallback models. Please check your Gemini API plan."}
+        elif "api_key" in error_str or "unauthorized" in error_str or "401" in error_str:
+            return {"error": "Invalid GEMINI_API_KEY provided."}
+        elif "503" in error_str or "unavailable" in error_str:
+            return {"error": "All AI models are currently overloaded. Please try again later."}
+        
+        return {"error": f"Gemini AI error: {last_error}"}
+
+    return {"error": "Failed to generate insights (unknown error)."}
