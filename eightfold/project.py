@@ -243,13 +243,7 @@ DEFAULT_FIELDS_CONFIG = {
         {"path": "candidate_id"},
         {"path": "full_name"},
         {"path": "emails"},
-        {"path": "phones"},
-        {"path": "current_company"},
-        {"path": "current_title"},
-        {"path": "department"},
-        {"path": "manager_name"},
-        {"path": "employment_status"},
-        {"path": "extra_attributes"}
+        {"path": "phones"}
     ],
     "include_confidence": False,
     "on_missing": "null",
@@ -274,7 +268,7 @@ def project_default(canonical):
     else:
         out["years_experience"] = None
         
-    out["links"] = canonical.get("links") or None
+    out["links"] = canonical.get("links") or {}
     out["education"] = canonical.get("education") or []
     
     # Skills mapping

@@ -41,7 +41,8 @@ def extract(path: str, source_id: str = None) -> SourceResult:
             except csv.Error:
                 dialect = "excel"  # Fallback
 
-            reader = csv.DictReader(f, dialect=dialect)
+            # Force all columns to be read strictly as strings
+            reader = csv.DictReader(f, dialect=dialect, quoting=csv.QUOTE_MINIMAL)
             if reader.fieldnames is None:
                 return SourceResult(source_id, "structured", ok=False,
                                      error="CSV has no header row")
@@ -70,7 +71,7 @@ def extract(path: str, source_id: str = None) -> SourceResult:
             normalized_to_canonical[alias] = canonical_field
 
     for original_col, normalized_col in header_lookup.items():
-        val = row.get(original_col, "").strip()
+        val = str(row.get(original_col, "")).strip()
         if not val:
             continue
         
