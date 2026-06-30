@@ -1,18 +1,73 @@
-# Eightfold — Candidate Profile Aggregation Pipeline
+# Candidate Profile Transformer
 
-A robust, multi-source candidate data transformer built for the **Eightfold Engineering Intern** assignment. 
+A multi-source candidate aggregation pipeline that transforms fragmented recruiting data into a single trusted candidate profile.
 
-This pipeline ingests candidate data from unstructured sources (Resume PDFs, GitHub API, LinkedIn API, Recruiter Notes) and structured sources (ATS JSON, Recruiter CSV). It merges these overlapping and often contradictory inputs into a single **Canonical Profile**, maintaining strict mathematical confidence scoring and full provenance tracking. Finally, it projects that canonical record into any requested JSON schema at runtime.
+Recruiters often receive information about the same candidate from multiple places: resumes, ATS exports, recruiter notes, LinkedIn profiles, GitHub profiles, and internal systems. These sources frequently contain conflicting, incomplete, or differently formatted information.
+
+This system ingests structured and unstructured candidate data, normalizes and reconciles conflicting values, generates a canonical candidate profile with confidence scoring and provenance tracking, and projects that profile into configurable output schemas without changing pipeline logic.
+
+The design prioritizes:
+
+* Deterministic and explainable processing
+* Source traceability and auditability
+* Robust handling of incomplete or malformed inputs
+* Configurable downstream data contracts
+* Recruiter-focused candidate insights
 
 ---
 
-## 🚀 Key Features
+## Key Features
 
-- **Algorithmic Conflict Resolution:** Mathematically resolves data contradictions across sources. True ties result in `null` rather than hallucinations, preserving data integrity.
-- **Configurable Projection (The Twist):** Reshape the internal canonical profile at runtime using a JSON config (select fields, apply normalizations like E.164, toggle provenance, define `on_missing` policies).
-- **AI Recruiter Insights:** Integrates with Google Gemini (cascading across Gemini 3.5, 2.5, 1.5, and Gemma 4) to intelligently analyze the parsed profile and identify missing data or potential concerns.
-- **Live Web Scraping:** Integrates with Apify to dynamically extract structured data from live LinkedIn and GitHub URLs discovered in the candidate's resume.
-- **Graceful Degradation:** Malformed PDFs, broken JSONs, or rate-limited APIs will not crash the pipeline. The system tracks failed sources and continues processing.
+### Multi-Source Candidate Fusion
+
+Supports both structured and unstructured candidate data:
+
+**Structured Sources**
+* Recruiter CSV exports
+* ATS JSON records
+
+**Unstructured Sources**
+* Resume PDFs
+* Recruiter notes
+* LinkedIn profiles (via Apify enrichment)
+* GitHub profiles (via Apify enrichment)
+
+### Canonical Profile Generation
+
+Transforms multiple overlapping sources into a single canonical profile while preserving:
+* Confidence scores
+* Source provenance
+* Conflict history
+* Normalized formats
+
+The system never invents values. When evidence is insufficient or conflicting, fields resolve to `null` instead of making assumptions.
+
+### Configurable Output Projection
+
+A runtime configuration layer can:
+* Select fields
+* Rename fields
+* Apply normalization rules
+* Toggle confidence metadata
+* Toggle provenance metadata
+* Control missing-value behavior
+
+The canonical profile remains unchanged while output contracts can vary for different consumers.
+
+### Recruiter AI Insights
+
+Google Gemini is used only after deterministic profile generation. It does not participate in extraction, normalization, conflict resolution, confidence scoring, or canonical profile creation.
+
+Gemini generates:
+* Candidate summary
+* Key strengths
+* Recommended roles
+* Missing information
+* Potential concerns
+
+### Profile Enrichment
+
+LinkedIn and GitHub URLs discovered inside uploaded resumes are automatically enriched using Apify. No manual URL entry is required.
 
 ---
 
@@ -85,5 +140,3 @@ The pipeline is thoroughly tested against extreme edge cases (severe candidate c
 # Run the test suite
 python -m unittest discover -s tests -v
 ```
-
-See `__Eightfold.md` for the comprehensive technical design document.
