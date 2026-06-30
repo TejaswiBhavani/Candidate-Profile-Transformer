@@ -1,0 +1,58 @@
+{
+  "full_name": "Tejaswi Bhavani Hari",
+  "full_name_confidence": 0.81,
+  "full_name_sources": [
+    "recruiter.csv",
+    "resume.pdf",
+    "linkedin.json"
+  ],
+  "primary_email": "tejaswi@gmail.com",
+  "primary_email_confidence": 0.8,
+  "primary_email_sources": [
+    "recruiter.csv",
+    "resume.pdf"
+  ],
+  "phone": "+919876543210",
+  "phone_confidence": 0.95,
+  "phone_sources": [
+    "recruiter.csv",
+    "resume.pdf",
+    "linkedin.json"
+  ],
+  "skills": [
+    "Java",
+    "Python",
+    "React",
+    "SQL"
+  ],
+  "skills_confidence": [
+    0.75,
+    0.75,
+    0.75,
+    0.6
+  ],
+  "skills_sources": [
+    [
+      "resume.pdf",
+      "linkedin.json"
+    ],
+    [
+      "resume.pdf",
+      "linkedin.json"
+    ],
+    [
+      "resume.pdf",
+      "linkedin.json"
+    ],
+    [
+      "linkedin.json"
+    ]
+  ],
+  "company": "Google",
+  "company_confidence": 0.95,
+  "company_sources": [
+    "recruiter.csv",
+    "resume.pdf",
+    "linkedin.json"
+  ]
+}

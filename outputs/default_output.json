@@ -1,0 +1,51 @@
+{
+  "candidate_id": "cand_35daddd011",
+  "full_name": "Tejaswi Bhavani Hari",
+  "emails": [
+    "tejaswi@gmail.com",
+    "tejaswi.bhavani@gmail.com"
+  ],
+  "phones": [
+    "+919876543210"
+  ],
+  "current_company": "Google",
+  "current_title": "Software Engineer",
+  "department": null,
+  "manager_name": null,
+  "employment_status": null,
+  "extra_attributes": {},
+  "skills": [
+    {
+      "name": "Java",
+      "confidence": 0.75,
+      "sources": [
+        "resume.pdf",
+        "linkedin.json"
+      ]
+    },
+    {
+      "name": "Python",
+      "confidence": 0.75,
+      "sources": [
+        "resume.pdf",
+        "linkedin.json"
+      ]
+    },
+    {
+      "name": "React",
+      "confidence": 0.75,
+      "sources": [
+        "resume.pdf",
+        "linkedin.json"
+      ]
+    },
+    {
+      "name": "SQL",
+      "confidence": 0.6,
+      "sources": [
+        "linkedin.json"
+      ]
+    }
+  ],
+  "overall_confidence": 0.9
+}

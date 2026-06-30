@@ -1,0 +1,6 @@
+{
+  "fields": [
+    { "path": "full_name" },
+    { "path": "primary_email", "from": "emails[0]" }
+  ]
+}
