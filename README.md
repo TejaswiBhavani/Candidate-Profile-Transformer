@@ -1,4 +1,4 @@
-# Candidate Profile Transformer
+# Candidate Data Transformer
 
 A multi-source candidate aggregation pipeline that transforms fragmented recruiting data into a single trusted candidate profile.
 
