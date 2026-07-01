@@ -58,6 +58,22 @@ LOCATION_HINTS = {
     "andhra pradesh", "india", "usa", "united states", "california",
 }
 
+DATE_LINE_RE = re.compile(
+    r"(?i)(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|"
+    r"[0-9]{4}).*?[-–—].*?(Present|Current|[0-9]{4}|[A-Za-z]{3,9}\s+[0-9]{4})"
+)
+
+JOB_TITLE_HINTS = {
+    "intern", "engineer", "developer", "analyst", "manager", "associate",
+    "consultant", "scientist", "lead", "specialist", "architect", "researcher",
+    "trainee", "fellow", "designer", "administrator", "software", "data",
+}
+
+COMPANY_HINTS = {
+    "pvt", "ltd", "inc", "corp", "llc", "llp", "company", "technologies",
+    "solutions", "systems", "labs", "group", "studio", "consulting", "services",
+}
+
 NAME_BLACKLIST = {
     "skills", "skill", "experience", "education", "projects", "project",
     "certifications", "certification", "awards", "award", "summary",
@@ -158,6 +174,95 @@ def _find_section(lines, canonical_name):
     return []
 
 
+def _looks_like_date_line(line):
+    return bool(DATE_LINE_RE.search(line or ""))
+
+
+def _looks_like_job_title(line):
+    text = re.sub(r"^[\s\u2022•·\-*]+", "", (line or "")).strip()
+    if not text or _looks_like_date_line(text) or _is_header_line(text):
+        return False
+    lowered = text.casefold()
+    return any(hint in lowered for hint in JOB_TITLE_HINTS)
+
+
+def _looks_like_company_line(line):
+    text = re.sub(r"^[\s\u2022•·\-*]+", "", (line or "")).strip()
+    if not text or _looks_like_date_line(text) or _is_header_line(text):
+        return False
+    lowered = text.casefold()
+    if any(hint in lowered for hint in COMPANY_HINTS):
+        return True
+    words = [w for w in re.split(r"\s+", text) if w]
+    titleish_words = sum(1 for w in words if w[:1].isupper())
+    return len(words) >= 2 and titleish_words >= max(2, len(words) - 1)
+
+
+def _experience_block_to_evidence(block, source_id):
+    if not block.get("company") and not block.get("title") and not block.get("summary"):
+        return []
+
+    summary = " ".join(block.get("summary", [])).strip() or None
+    experience_value = {
+        "company": block.get("company"),
+        "title": block.get("title"),
+        "start": block.get("start"),
+        "end": block.get("end"),
+        "summary": summary,
+    }
+    evidence = [Evidence("experience", experience_value, experience_value, source_id, "unstructured", "heuristic:experience_block")]
+
+    if block.get("title"):
+        evidence.append(Evidence("current_title", block["title"], block["title"], source_id, "unstructured", "heuristic:experience_block"))
+    if block.get("company"):
+        evidence.append(Evidence("current_company", block["company"], block["company"], source_id, "unstructured", "heuristic:experience_block"))
+
+    return evidence
+
+
+def _extract_experience_entries(exp_lines, source_id):
+    entries = []
+    block = {"company": None, "title": None, "start": None, "end": None, "summary": []}
+
+    def flush_block():
+        nonlocal block
+        entries.extend(_experience_block_to_evidence(block, source_id))
+        block = {"company": None, "title": None, "start": None, "end": None, "summary": []}
+
+    for raw_line in exp_lines:
+        line = re.sub(r"^[\s\u2022•·\-*]+", "", (raw_line or "")).strip()
+        if not line:
+            continue
+
+        if _looks_like_date_line(line):
+            date_text = line
+            match = DATE_LINE_RE.search(date_text)
+            if match:
+                block["start"] = date_text.split(match.group(0), 1)[0].strip() or block.get("start")
+                block["end"] = match.group(0).split("-", 1)[-1].strip() if "-" in match.group(0) or "–" in match.group(0) or "—" in match.group(0) else block.get("end")
+            continue
+
+        if _looks_like_company_line(line) and block.get("company") and (block.get("title") or block.get("summary")):
+            flush_block()
+
+        if block.get("company") is None and _looks_like_company_line(line):
+            block["company"] = line
+            continue
+
+        if block.get("title") is None and _looks_like_job_title(line):
+            block["title"] = line
+            continue
+
+        if any(hint in line.casefold() for hint in LOCATION_HINTS):
+            continue
+
+        if line.startswith("•") or line.startswith("-") or line.startswith("*") or block.get("title") or block.get("company"):
+            block["summary"].append(line)
+
+    flush_block()
+    return entries
+
+
 def extract(path: str, source_id: str = None) -> SourceResult:
     source_id = source_id or os.path.basename(path)
     try:
@@ -209,34 +314,7 @@ def extract(path: str, source_id: str = None) -> SourceResult:
 
     exp_lines = _find_section(lines, "experience")
     if exp_lines:
-        DATE_RANGE_RE = re.compile(r"(?i)(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|[0-9]{4}).*?[-–].*?(Present|Current|[0-9]{4})")
-        
-        for i, line in enumerate(exp_lines):
-            date_m = DATE_RANGE_RE.search(line)
-            if date_m:
-                raw_date = date_m.group(0).strip()
-                evidence.append(Evidence("experience_dates", raw_date, raw_date, source_id, 
-                                         "unstructured", "regex:date_anchor"))
-                
-                if "present" in line.lower() or "current" in line.lower():
-                    # Extract title and company from the preceding line if possible
-                    if i > 0:
-                        role_line = exp_lines[i-1]
-                        parts = [p.strip() for p in re.split(r'[|\-,]', role_line) if p.strip()]
-                        if len(parts) >= 2:
-                            title_raw, company_raw = parts[0], parts[1]
-                        else:
-                            at_parts = re.split(r'(?i)\s+at\s+', role_line, maxsplit=1)
-                            if len(at_parts) == 2:
-                                title_raw, company_raw = at_parts[0].strip(), at_parts[1].strip()
-                            else:
-                                title_raw = company_raw = parts[0]
-                            
-                        evidence.append(Evidence("current_title", title_raw, title_raw, source_id, 
-                                                 "unstructured", "heuristic:anchored_role"))
-                        evidence.append(Evidence("current_company", company_raw, company_raw, source_id, 
-                                                 "unstructured", "heuristic:anchored_role"))
-                    break # Usually the top role is current
+        evidence.extend(_extract_experience_entries(exp_lines, source_id))
 
     edu_lines = _find_section(lines, "education")
     if edu_lines:

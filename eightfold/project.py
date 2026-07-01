@@ -271,7 +271,11 @@ def project_default(canonical):
         out["years_experience"] = None
         
     out["links"] = canonical.get("links") or {}
-    out["education"] = canonical.get("education") or []
+
+    education = canonical.get("education") or []
+    if education and not isinstance(education, list):
+        education = [education]
+    out["education"] = education
     
     # Skills mapping
     out["skills"] = [
@@ -281,6 +285,8 @@ def project_default(canonical):
     
     # Experience mapping
     exp_list = canonical.get("experience") or []
+    if exp_list and not isinstance(exp_list, list):
+        exp_list = [exp_list]
     if exp_list:
         out["experience"] = exp_list
     else:

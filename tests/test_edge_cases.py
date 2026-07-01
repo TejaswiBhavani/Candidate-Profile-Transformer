@@ -66,6 +66,27 @@ class TestSourceRobustness(unittest.TestCase):
         ]
         self.assertEqual(_pick_name_line(lines), "TEJASWI BHAVANI HARI")
 
+    def test_pdf_experience_block_parser_captures_dated_roles(self):
+        from eightfold.sources.pdf_source import _extract_experience_entries
+        lines = [
+            "Stefanini India Pvt. Ltd.",
+            "AI Intern",
+            "May 2026– June 2026",
+            "Hyderabad, Telangana",
+            "• Architected a Dynamic Agentic Orchestration Platform",
+            "• Developed a centralized Resource Registry",
+        ]
+        evidence = _extract_experience_entries(lines, "resume.pdf")
+        exp_values = [ev.value for ev in evidence if ev.field_name == "experience"]
+        titles = [ev.value for ev in evidence if ev.field_name == "current_title"]
+        companies = [ev.value for ev in evidence if ev.field_name == "current_company"]
+
+        self.assertTrue(exp_values)
+        self.assertEqual(titles[0], "AI Intern")
+        self.assertEqual(companies[0], "Stefanini India Pvt. Ltd.")
+        self.assertEqual(exp_values[0]["title"], "AI Intern")
+        self.assertEqual(exp_values[0]["company"], "Stefanini India Pvt. Ltd.")
+
     def test_skill_canonicalization_cleans_typos_and_punctuation(self):
         from eightfold.skills_map import canonicalize_skill
         self.assertEqual(canonicalize_skill("Eclispe."), ("Eclipse", True))
