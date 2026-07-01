@@ -58,6 +58,15 @@ LOCATION_HINTS = {
     "andhra pradesh", "india", "usa", "united states", "california",
 }
 
+NAME_BLACKLIST = {
+    "skills", "skill", "experience", "education", "projects", "project",
+    "certifications", "certification", "awards", "award", "summary",
+    "objective", "community", "activities", "activity", "extracurricular",
+    "extracirricular", "technical", "professional", "profile", "contact",
+    "links", "link", "work", "internship", "internships", "achievements",
+    "leadership", "languages", "languages & proficiency", "technical skills",
+}
+
 
 def _looks_like_name_line(line):
     clean_line = re.sub(r"\s+", " ", line.strip())
@@ -71,7 +80,7 @@ def _looks_like_name_line(line):
         return False
     if re.search(r'\d', clean_line):
         return False
-    if any(token in clean_line.lower() for token in ("skills", "experience", "education", "projects", "certifications", "awards", "summary", "objective", "community")):
+    if any(token in clean_line.lower() for token in NAME_BLACKLIST):
         return False
     if "," in clean_line and any(hint in clean_line.lower() for hint in LOCATION_HINTS):
         return False
@@ -106,13 +115,15 @@ def _pick_name_line(lines):
                 score = 0
                 clean_line = line.strip()
                 if clean_line == clean_line.upper():
-                    score += 3
+                    score += 1
                 if len(clean_line.split()) in (2, 3):
                     score += 2
                 if idx <= 3:
                     score += 1
                 if not any(hint in clean_line.lower() for hint in LOCATION_HINTS):
                     score += 2
+                if clean_line == clean_line.title():
+                    score += 3
                 score += max(position_bonus_base - idx, 0)
                 collected.append((score, idx, clean_line))
         return collected
