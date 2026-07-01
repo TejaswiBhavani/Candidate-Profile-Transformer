@@ -223,41 +223,59 @@ def _experience_block_to_evidence(block, source_id):
 def _extract_experience_entries(exp_lines, source_id):
     entries = []
     block = {"company": None, "title": None, "start": None, "end": None, "summary": []}
+    role_context = []
+    summary_started = False
 
     def flush_block():
-        nonlocal block
+        nonlocal block, role_context, summary_started
         entries.extend(_experience_block_to_evidence(block, source_id))
         block = {"company": None, "title": None, "start": None, "end": None, "summary": []}
+        role_context = []
+        summary_started = False
+
+    def assign_role_fields_from_context():
+        if role_context and not block.get("company"):
+            block["company"] = role_context[0]
+        if len(role_context) > 1 and not block.get("title"):
+            block["title"] = role_context[1]
 
     for raw_line in exp_lines:
+        is_bullet = bool(re.match(r"^[\s\u2022•·\-*]+", raw_line or ""))
         line = re.sub(r"^[\s\u2022•·\-*]+", "", (raw_line or "")).strip()
         if not line:
             continue
 
         if _looks_like_date_line(line):
-            date_text = line
-            match = DATE_LINE_RE.search(date_text)
+            assign_role_fields_from_context()
+            match = DATE_LINE_RE.search(line)
             if match:
-                block["start"] = date_text.split(match.group(0), 1)[0].strip() or block.get("start")
-                block["end"] = match.group(0).split("-", 1)[-1].strip() if "-" in match.group(0) or "–" in match.group(0) or "—" in match.group(0) else block.get("end")
+                block["start"] = line.split(match.group(0), 1)[0].strip() or block.get("start")
+                block["end"] = match.group(0).split("-", 1)[-1].strip() if any(sep in match.group(0) for sep in ("-", "–", "—")) else block.get("end")
+            summary_started = True
             continue
 
-        if _looks_like_company_line(line) and block.get("company") and (block.get("title") or block.get("summary")):
-            flush_block()
-
-        if block.get("company") is None and _looks_like_company_line(line):
-            block["company"] = line
-            continue
-
-        if block.get("title") is None and _looks_like_job_title(line):
-            block["title"] = line
-            continue
-
-        if any(hint in line.casefold() for hint in LOCATION_HINTS):
-            continue
-
-        if line.startswith("•") or line.startswith("-") or line.startswith("*") or block.get("title") or block.get("company"):
+        if is_bullet or summary_started:
             block["summary"].append(line)
+            summary_started = True
+            continue
+
+        if any(hint in line.casefold() for hint in LOCATION_HINTS) and not _looks_like_company_line(line) and not _looks_like_job_title(line):
+            continue
+
+        if block.get("company") is None:
+            block["company"] = line
+            role_context.append(line)
+            continue
+
+        if block.get("title") is None:
+            block["title"] = line
+            role_context.append(line)
+            continue
+
+        # If we already have a company/title pair and see a new plain line
+        # before any bullets, treat it as additional role context rather than
+        # reassigning metadata from project prose.
+        role_context.append(line)
 
     flush_block()
     return entries
