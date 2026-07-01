@@ -17,6 +17,7 @@ import { Lightning, Search, Tools, Briefcase, Graduation, Link, Robot, Warning }
 function App() {
   const [files, setFiles] = useState<File[]>([])
   const [result, setResult] = useState<PipelineResponse | null>(null)
+  const [selectedCandidateIndex, setSelectedCandidateIndex] = useState(0)
   const [isRunning, setIsRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showWorkflow, setShowWorkflow] = useState(false)
@@ -29,6 +30,7 @@ function App() {
     setIsRunning(true)
     setError(null)
     setResult(null)
+    setSelectedCandidateIndex(0)
     try {
       const data = await runPipeline(files)
       setResult(data)
@@ -43,21 +45,29 @@ function App() {
     setFiles([])
     setResult(null)
     setError(null)
+    setSelectedCandidateIndex(0)
   }
 
   const downloadJson = () => {
-    if (!result?.output) return
-    const blob = new Blob([JSON.stringify(result.output, null, 2)], { type: 'application/json' })
+    const selectedCandidate = result?.candidate_outputs?.[selectedCandidateIndex]
+    const payload = selectedCandidate?.output || result?.output
+    if (!payload) return
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `candidate_profile_${result.output.candidate_id || 'output'}.json`
+    a.download = `candidate_profile_${payload.candidate_id || 'output'}.json`
     a.click()
     URL.revokeObjectURL(url)
   }
 
   const showInput = !result
-  const profile = result?.output
+  const selectedCandidate = result?.candidate_outputs?.[selectedCandidateIndex]
+  const profile = selectedCandidate?.output || result?.output
+  const profileWarnings = selectedCandidate?.warnings || result?.warnings || []
+  const profileCanonical = selectedCandidate?.canonical || result?.canonical
+  const candidateOutputs = result?.candidate_outputs || []
+  const hasCandidateBatch = candidateOutputs.length > 1
 
   return (
     <main className="app-shell">
@@ -121,6 +131,38 @@ function App() {
       {/* ========== OUTPUT SCREEN ========== */}
       {profile && (
         <section className="output-screen">
+          {hasCandidateBatch && (
+            <div className="profile-card full-width">
+              <h3 className="card-title" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                <Search size={20} /> CSV Candidates
+              </h3>
+              <div className="candidate-switcher">
+                {candidateOutputs.map((candidate, index) => {
+                  const candidateProfile = candidate.output
+                  const isActive = index === selectedCandidateIndex
+                  return (
+                    <button
+                      key={candidate.source_id || index}
+                      type="button"
+                      className={`candidate-switcher-card ${isActive ? 'active' : ''}`}
+                      onClick={() => setSelectedCandidateIndex(index)}
+                    >
+                      <span className="candidate-switcher-name">
+                        {candidateProfile?.full_name || candidate.source_id}
+                      </span>
+                      <span className="candidate-switcher-meta">
+                        {candidateProfile?.headline || candidateProfile?.experience?.[0]?.title || 'Candidate'}
+                      </span>
+                      <span className="candidate-switcher-confidence">
+                        {candidateProfile ? Math.round(candidateProfile.overall_confidence * 100) : 0}%
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Candidate Header */}
           <CandidateHeader profile={profile} />
 
@@ -186,9 +228,9 @@ function App() {
 
           {/* Technical Details (Collapsed) */}
           <TechAccordion
-            canonical={result.canonical}
-            output={result.output as any}
-            warnings={result.warnings}
+            canonical={profileCanonical}
+            output={profile as any}
+            warnings={profileWarnings}
             provenance={profile.provenance || []}
           />
         </section>

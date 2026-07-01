@@ -25,46 +25,44 @@ def _normalize_header(header: str) -> str:
     return re.sub(r'[^a-z0-9]', '', header.strip().lower())
 
 
-
-def extract(path: str, source_id: str = None) -> SourceResult:
-    source_id = source_id or os.path.basename(path)
+def _read_csv(path: str):
+    source_id = os.path.basename(path)
     try:
         with open(path, newline="", encoding="utf-8-sig") as f:
             sample = f.read(2048)
             f.seek(0)
-            
-            # Use sniffer to detect tab/csv properly
+
             try:
                 dialect = csv.Sniffer().sniff(sample)
                 if dialect.delimiter not in (",", "\t", ";", "|"):
                     dialect = "excel"
             except csv.Error:
-                dialect = "excel"  # Fallback
+                dialect = "excel"
 
-            # Force all columns to be read strictly as strings
             reader = csv.DictReader(f, dialect=dialect, quoting=csv.QUOTE_MINIMAL)
             if reader.fieldnames is None:
-                return SourceResult(source_id, "structured", ok=False,
-                                     error="CSV has no header row")
-            # map original header to normalized header
+                return None, None, None, SourceResult(source_id, "structured", ok=False,
+                                                     error="CSV has no header row")
             header_lookup = {h: _normalize_header(h) for h in reader.fieldnames if h}
             rows = list(reader)
     except FileNotFoundError:
-        return SourceResult(source_id, "structured", ok=False, error="file not found")
+        return None, None, None, SourceResult(source_id, "structured", ok=False, error="file not found")
     except (OSError, csv.Error, UnicodeDecodeError) as e:
-        return SourceResult(source_id, "structured", ok=False, error=f"unreadable CSV: {e}")
+        return None, None, None, SourceResult(source_id, "structured", ok=False, error=f"unreadable CSV: {e}")
 
     if not rows:
-        return SourceResult(source_id, "structured", ok=False, error="CSV has no data rows")
+        return None, None, None, SourceResult(source_id, "structured", ok=False, error="CSV has no data rows")
 
     warnings = []
     if len(rows) > 1:
-        warnings.append(f"CSV contains {len(rows)} rows; defaulting to the first row.")
+        warnings.append(f"CSV contains {len(rows)} rows; batch mode enabled.")
 
-    row = rows[0]
+    return header_lookup, rows, warnings, None
+
+
+def _build_row_source_result(row, header_lookup, source_id: str, row_index: int) -> SourceResult:
     evidence = []
-    
-    # Reverse mapping for faster lookup
+
     normalized_to_canonical = {}
     for canonical_field, aliases in COLUMN_ALIASES.items():
         for alias in aliases:
@@ -74,12 +72,11 @@ def extract(path: str, source_id: str = None) -> SourceResult:
         val = str(row.get(original_col, "")).strip()
         if not val:
             continue
-        
+
         if normalized_col in normalized_to_canonical:
             canonical_field = normalized_to_canonical[normalized_col]
-            
+
             if canonical_field == "skills":
-                # Split by comma, pipe, or semicolon
                 raw_skills = re.split(r'[,|;]', val)
                 for s in raw_skills:
                     s_clean = s.strip()
@@ -88,7 +85,7 @@ def extract(path: str, source_id: str = None) -> SourceResult:
                             field_name="skills",
                             value=s_clean,
                             raw_value=s_clean,
-                            source_id=source_id,
+                            source_id=f"{source_id}#row{row_index}",
                             source_type="structured",
                             method=f"csv_column:{original_col}",
                         ))
@@ -97,19 +94,49 @@ def extract(path: str, source_id: str = None) -> SourceResult:
                     field_name=canonical_field,
                     value=val,
                     raw_value=val,
-                    source_id=source_id,
+                    source_id=f"{source_id}#row{row_index}",
                     source_type="structured",
                     method=f"csv_column:{original_col}",
                 ))
         else:
-            # Dynamic discovery / extra_attributes
             evidence.append(Evidence(
                 field_name="extra_attributes",
                 value={original_col: val},
                 raw_value={original_col: val},
-                source_id=source_id,
+                source_id=f"{source_id}#row{row_index}",
                 source_type="structured",
                 method=f"csv_column:{original_col}",
             ))
 
-    return SourceResult(source_id, "structured", ok=True, warnings=warnings, evidence=evidence)
+    return SourceResult(f"{source_id}#row{row_index}", "structured", ok=True, evidence=evidence)
+
+
+def extract_rows(path: str, source_id: str = None):
+    source_id = source_id or os.path.basename(path)
+    header_lookup, rows, warnings, error_result = _read_csv(path)
+    if error_result:
+        return [], warnings or [], error_result
+
+    row_results = [
+        _build_row_source_result(row, header_lookup, source_id, idx + 1)
+        for idx, row in enumerate(rows)
+    ]
+    return row_results, warnings, None
+
+
+def extract(path: str, source_id: str = None) -> SourceResult:
+    source_id = source_id or os.path.basename(path)
+    row_results, warnings, error_result = extract_rows(path, source_id=source_id)
+    if error_result:
+        return error_result
+    if not row_results:
+        return SourceResult(source_id, "structured", ok=False, error="CSV has no data rows")
+    first_row = row_results[0]
+    first_row = SourceResult(
+        source_id,
+        "structured",
+        ok=True,
+        warnings=warnings,
+        evidence=first_row.evidence,
+    )
+    return first_row

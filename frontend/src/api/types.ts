@@ -61,7 +61,16 @@ export interface PipelineResponse {
   validation_errors: string[]
   canonical: JsonObject | null
   output: ProfileOutput | null
+  candidate_outputs?: CandidateOutput[] | null
   discovered_urls: DiscoveredUrls | null
   enrichment_status: string
   gemini_insights: GeminiInsights | null
+}
+
+export interface CandidateOutput {
+  source_id: string
+  canonical: JsonObject | null
+  output: ProfileOutput | null
+  warnings: string[]
+  validation_errors: string[]
 }

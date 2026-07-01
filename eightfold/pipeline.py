@@ -39,10 +39,62 @@ class PipelineResult:
         self.discovered_urls = discovered_urls or {}
         self.enrichment_status = enrichment_status or "skipped"
         self.gemini_insights = gemini_insights
+        self.candidate_outputs = None
 
     @property
     def ok(self):
         return not self.validation_errors
+
+
+def _finalize_source_results(source_results, source_ids_in_order, config=None):
+    canonical = build_canonical_profile(source_results, source_order=source_ids_in_order)
+
+    warnings = []
+    validation_errors = []
+    output = None
+
+    try:
+        if config is None:
+            output = project_default(canonical)
+            schema = DEFAULT_OUTPUT_SCHEMA
+        else:
+            validate_runtime_config(config)
+            output = project(canonical, config)
+            schema = build_schema_from_config(config)
+        validate(output, schema)
+    except ProjectionError as e:
+        validation_errors.extend(f"projection: {err}" for err in e.errors)
+    except ValidationError as e:
+        validation_errors.extend(f"validation: {err}" for err in e.errors)
+
+    if output:
+        has_email = bool(output.get("emails"))
+        has_phone = bool(output.get("phones"))
+        has_skills = bool(output.get("skills"))
+        if not (has_email or has_phone or has_skills):
+            warnings.append("Profile incomplete: missing email, phone, skills")
+
+    for sr in source_results:
+        if not sr.ok:
+            warnings.append(f"source '{sr.source_id}' skipped: {sr.error}")
+        if getattr(sr, "warnings", None):
+            warnings.extend(sr.warnings)
+
+    for skipped in canonical["_meta"]["skipped_evidence"]:
+        warnings.append(
+            f"dropped unparseable {skipped['field']} value "
+            f"{skipped['raw_value']!r} from {skipped['source_id']}"
+        )
+
+    for field_name in ("full_name", "current_company", "current_title"):
+        field = canonical[field_name]
+        if field.get("conflict"):
+            warnings.append(
+                f"conflict on '{field_name}': resolved to {field['value']!r} "
+                f"(other values seen: {field['conflicting_values']})"
+            )
+
+    return canonical, output, warnings, validation_errors
 
 
 def _extract_one(path):
@@ -93,6 +145,40 @@ def run(source_paths, config=None):
     only raises for programmer errors (e.g. malformed config path syntax)."""
     source_ids_in_order = [os.path.basename(p) for p in source_paths]
     source_results = [_extract_one(p) for p in source_paths]
+
+    candidate_outputs = []
+    batch_csv_paths = [p for p in source_paths if p.lower().endswith(".csv")]
+    if len(batch_csv_paths) == 1 and len(source_paths) == 1:
+        batch_results, csv_warnings, csv_error = csv_source.extract_rows(batch_csv_paths[0], source_id=os.path.basename(batch_csv_paths[0]))
+        if csv_error:
+            return PipelineResult(
+                output=None,
+                canonical={"_meta": {"skipped_evidence": []}},
+                warnings=csv_warnings or [],
+                validation_errors=[csv_error.error or "CSV error"],
+            )
+        if len(batch_results) > 1:
+            for row_result in batch_results:
+                canonical, output, warnings, validation_errors = _finalize_source_results(
+                    [row_result],
+                    [row_result.source_id],
+                    config=config,
+                )
+                candidate_outputs.append({
+                    "source_id": row_result.source_id,
+                    "canonical": canonical,
+                    "output": output,
+                    "warnings": (csv_warnings or []) + warnings,
+                    "validation_errors": validation_errors,
+                })
+            canonical, output, warnings, validation_errors = _finalize_source_results(
+                [batch_results[0]],
+                [batch_results[0].source_id],
+                config=config,
+            )
+            result = PipelineResult(output, canonical, (csv_warnings or []) + warnings, validation_errors)
+            result.candidate_outputs = candidate_outputs
+            return result
 
     # --- URL Discovery ---
     raw_texts = _collect_raw_texts(source_paths, source_results)
@@ -148,7 +234,7 @@ def run(source_paths, config=None):
     for sr in source_results:
         if not sr.ok:
             warnings.append(f"source '{sr.source_id}' skipped: {sr.error}")
-        if hasattr(sr, 'warnings') and sr.warnings:
+        if getattr(sr, "warnings", None):
             warnings.extend(sr.warnings)
     for skipped in canonical["_meta"]["skipped_evidence"]:
         warnings.append(
@@ -190,8 +276,7 @@ def run(source_paths, config=None):
     gemini_insights = None
     if output:
         gemini_insights = generate_insights(output)
-
-    return PipelineResult(
+    result = PipelineResult(
         output=output,
         canonical=canonical,
         warnings=warnings,
@@ -200,3 +285,6 @@ def run(source_paths, config=None):
         enrichment_status=enrichment_status,
         gemini_insights=gemini_insights,
     )
+    if candidate_outputs:
+        result.candidate_outputs = candidate_outputs
+    return result

@@ -1,5 +1,6 @@
 import os
 import unittest
+import tempfile
 
 from eightfold.pipeline import run
 
@@ -121,6 +122,25 @@ class TestURLDiscoveryAndPriority(unittest.TestCase):
         self.assertEqual(_source_rank("recruiter.csv", []), 4)
         # TXT is last
         self.assertEqual(_source_rank("notes.txt", []), 5)
+
+
+class TestCSVBatchMode(unittest.TestCase):
+    def test_multi_row_csv_produces_candidate_outputs(self):
+        with tempfile.NamedTemporaryFile("w", suffix=".csv", delete=False, encoding="utf-8", newline="") as handle:
+            handle.write("name,email,phone,current_company,title,skills\n")
+            handle.write("Alice Example,alice@example.com,1111111111,Acme,Engineer,Python;SQL\n")
+            handle.write("Bob Example,bob@example.com,2222222222,Globex,Manager,Java;Leadership\n")
+            temp_path = handle.name
+
+        try:
+            result = run([temp_path])
+            self.assertTrue(result.ok, result.validation_errors)
+            self.assertIsNotNone(result.candidate_outputs)
+            self.assertEqual(len(result.candidate_outputs), 2)
+            self.assertEqual(result.candidate_outputs[0]["output"]["full_name"], "Alice Example")
+            self.assertEqual(result.candidate_outputs[1]["output"]["full_name"], "Bob Example")
+        finally:
+            os.unlink(temp_path)
 
 
 if __name__ == "__main__":
