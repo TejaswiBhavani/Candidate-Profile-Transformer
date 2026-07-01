@@ -19,12 +19,28 @@ ROOT = Path(__file__).resolve().parent
 CONFIGS_DIR = ROOT / "configs"
 
 
+def _parse_cors_origins() -> list[str]:
+    raw = os.environ.get("CORS_ALLOW_ORIGINS", "").strip()
+    if not raw:
+        return ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+    return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
+
+def _cors_origin_regex() -> str | None:
+    raw = os.environ.get("CORS_ALLOW_ORIGIN_REGEX", "").strip()
+    if raw:
+        return raw
+    return r"https://.*\.vercel\.app"
+
+
 app = FastAPI(title="Eightfold Pipeline API", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=_parse_cors_origins(),
+    allow_origin_regex=_cors_origin_regex(),
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
