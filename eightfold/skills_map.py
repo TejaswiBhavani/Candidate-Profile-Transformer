@@ -9,6 +9,8 @@ than being dropped — we never invent or discard a candidate's stated
 skill, we just don't get the canonicalization confidence bonus for it.
 """
 
+import re
+
 # lowercased variant -> canonical display name
 SKILL_SYNONYMS = {
     "python": "Python",
@@ -55,6 +57,19 @@ SKILL_SYNONYMS = {
     "rest api": "REST APIs",
     "rest apis": "REST APIs",
     "restful api": "REST APIs",
+    "eclispe": "Eclipse",
+    "eclipse": "Eclipse",
+    "vs code": "VS Code",
+    "visual studio": "Visual Studio",
+    "github": "GitHub",
+    "mongodb": "MongoDB",
+    "firebase": "Firebase",
+    "kubernetes": "Kubernetes",
+    "typescript": "TypeScript",
+    "javascript": "JavaScript",
+    "html": "HTML",
+    "css": "CSS",
+    "c/c++": "C/C++",
 }
 
 
@@ -66,6 +81,7 @@ def canonicalize_skill(raw: str):
     if raw is None:
         return None, False
     cleaned = " ".join(str(raw).strip().split())
+    cleaned = re.sub(r"^[\s\u2022•·\-*]+", "", cleaned).rstrip(".,;:")
     if not cleaned:
         return None, False
     key = cleaned.lower()

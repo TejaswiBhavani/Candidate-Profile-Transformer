@@ -57,6 +57,20 @@ class TestSourceRobustness(unittest.TestCase):
         ]
         self.assertEqual(_pick_name_line(lines), "TEJASWI BHAVANI HARI")
 
+    def test_pdf_name_picker_skips_section_headers(self):
+        from eightfold.sources.pdf_source import _pick_name_line
+        lines = [
+            "TECHNNICAL SKILLS",
+            "TEJASWI BHAVANI HARI",
+            "Hyderabad, Telangana, India",
+        ]
+        self.assertEqual(_pick_name_line(lines), "TEJASWI BHAVANI HARI")
+
+    def test_skill_canonicalization_cleans_typos_and_punctuation(self):
+        from eightfold.skills_map import canonicalize_skill
+        self.assertEqual(canonicalize_skill("Eclispe."), ("Eclipse", True))
+        self.assertEqual(canonicalize_skill("VS code"), ("VS Code", True))
+
 
 class TestOnMissingPolicies(unittest.TestCase):
     def setUp(self):

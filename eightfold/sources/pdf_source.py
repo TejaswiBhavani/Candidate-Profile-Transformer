@@ -63,11 +63,15 @@ def _looks_like_name_line(line):
     clean_line = re.sub(r"\s+", " ", line.strip())
     if len(clean_line) < 3:
         return False
+    if _normalize_header(clean_line) is not None:
+        return False
     if clean_line.lower() in ("resume", "cv", "curriculum vitae"):
         return False
     if "@" in clean_line or PHONE_RE.search(clean_line) or re.search(r'https?://|www\.', clean_line, re.IGNORECASE):
         return False
     if re.search(r'\d', clean_line):
+        return False
+    if any(token in clean_line.lower() for token in ("skills", "experience", "education", "projects", "certifications", "awards", "summary", "objective", "community")):
         return False
     if "," in clean_line and any(hint in clean_line.lower() for hint in LOCATION_HINTS):
         return False
@@ -163,9 +167,15 @@ def extract(path: str, source_id: str = None) -> SourceResult:
     skill_lines = _find_section(lines, "skills")
     if skill_lines:
         for chunk in skill_lines:
-            raw_skills = re.split(r'[,|•·\-\*]', chunk)
+            cleaned_chunk = re.sub(r"^[\s\u2022•·\-*]+", "", chunk).strip().rstrip(".,;:")
+            if ":" in cleaned_chunk:
+                _, after = cleaned_chunk.split(":", 1)
+                after = after.strip()
+                if after:
+                    cleaned_chunk = after
+            raw_skills = re.split(r'[,|•·\-\*]', cleaned_chunk)
             for s in raw_skills:
-                s = s.strip()
+                s = re.sub(r"^[\s\u2022•·\-*]+", "", s).strip().rstrip(".,;:")
                 if len(s) > 1:
                     evidence.append(Evidence("skills", s, s, source_id, "unstructured",
                                               "heuristic:skills_multi_split"))
