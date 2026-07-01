@@ -97,6 +97,16 @@ class TestURLDiscoveryAndPriority(unittest.TestCase):
         self.assertEqual(urls["github"], "https://github.com/johndoe")
         self.assertEqual(urls["portfolio"], "https://www.johndoe.dev/portfolio")
 
+    def test_discover_urls_handles_wrapped_profile_links(self):
+        from eightfold.url_discovery import discover_urls
+        text = [
+            "linkedin.com / in / jane-doe-123",
+            "GitHub profile: github.com / JaneDoe123"
+        ]
+        urls = discover_urls(text)
+        self.assertEqual(urls["linkedin"], "https://linkedin.com/in/jane-doe-123")
+        self.assertEqual(urls["github"], "https://github.com/JaneDoe123")
+
     def test_source_priority_ranking(self):
         from eightfold.merge import _source_rank
         # Resume is highest priority

@@ -86,6 +86,8 @@ npm run dev
 ```
 Open **`http://localhost:5173`** in your browser to view the interactive candidate profile transformer.
 
+If you deploy the frontend separately, set `VITE_API_BASE` in Vercel to the public backend URL. The frontend only falls back to `http://127.0.0.1:8000` during local development.
+
 ### 2. Command Line Interface (CLI)
 If you prefer a pure terminal experience, the CLI natively handles the projection and canonical merging.
 

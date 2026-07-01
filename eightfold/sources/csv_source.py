@@ -16,7 +16,7 @@ COLUMN_ALIASES = {
     "department": ("department",),
     "manager_name": ("managername",),
     "employment_status": ("employmentstatus",),
-    "skills": ("skills", "skill", "technologies", "techstack"),
+    "skills": ("skills", "skill", "technologies", "techstack", "techskills", "technicalskills", "technnicalskills"),
 }
 
 def _normalize_header(header: str) -> str:

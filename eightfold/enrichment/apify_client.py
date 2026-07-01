@@ -11,7 +11,11 @@ pipeline continues without it.
 
 import os
 from typing import Any, Dict, List, Optional
-from apify_client import ApifyClient
+
+try:
+    from apify_client import ApifyClient
+except ImportError:
+    ApifyClient = None
 
 from ..models import Evidence
 
@@ -29,7 +33,7 @@ def enrich_linkedin(linkedin_url: str) -> Dict[str, Any]:
     """Scrapes a LinkedIn profile using harvestapi/linkedin-profile-scraper.
     Returns empty dict on failure."""
     token = _get_token()
-    if not token or not linkedin_url:
+    if not token or not linkedin_url or ApifyClient is None:
         return {}
 
     try:
@@ -52,7 +56,7 @@ def enrich_github(github_url: str) -> Dict[str, Any]:
     """Scrapes a GitHub profile using saswave/github-profile-scraper.
     Returns empty dict on failure."""
     token = _get_token()
-    if not token or not github_url:
+    if not token or not github_url or ApifyClient is None:
         return {}
 
     try:
@@ -65,6 +69,14 @@ def enrich_github(github_url: str) -> Dict[str, Any]:
         items = list(client.dataset(run["defaultDatasetId"]).iterate_items())
         if items:
             return items[0]
+        key_value_store = client.key_value_store(run["defaultKeyValueStoreId"])
+        for key in ("OUTPUT", "output", "RESULT", "results"):
+            try:
+                payload = key_value_store.get_record(key)
+            except Exception:
+                payload = None
+            if isinstance(payload, dict) and payload:
+                return payload
         return {}
     except Exception as e:
         print(f"Apify GitHub scraper failed: {e}")

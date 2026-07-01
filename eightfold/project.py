@@ -256,6 +256,8 @@ def project_default(canonical):
     out = project(canonical, DEFAULT_FIELDS_CONFIG)
     
     # Enforce strict schema keys (null or empty arrays for missing data)
+    out["current_company"] = canonical.get("current_company", {}).get("value")
+    out["current_title"] = canonical.get("current_title", {}).get("value")
     out["location"] = canonical.get("location", {}).get("value")
     out["headline"] = canonical.get("headline", {}).get("value")
     

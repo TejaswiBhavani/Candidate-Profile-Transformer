@@ -29,7 +29,7 @@ def _extract_text(path):
 # section's content at the next recognized header line, not just a
 # blank line.
 SECTION_ALIASES = {
-    "skills": ["skills", "technical skills", "core competencies", "expertise", "technologies"],
+    "skills": ["skills", "technical skills", "technnical skills", "core competencies", "expertise", "technologies"],
     "experience": ["experience", "work experience", "professional experience", "employment history", "work history"],
     "education": ["education", "academic background", "qualifications"],
     "summary": ["summary", "objective", "professional summary"],
@@ -50,6 +50,63 @@ def _normalize_header(line):
 
 def _is_header_line(line):
     return _normalize_header(line) is not None
+
+
+LOCATION_HINTS = {
+    "india", "remote", "hyderabad", "telangana", "bangalore", "bengaluru",
+    "delhi", "mumbai", "pune", "chennai", "karnataka", "maharashtra",
+    "andhra pradesh", "india", "usa", "united states", "california",
+}
+
+
+def _looks_like_name_line(line):
+    clean_line = re.sub(r"\s+", " ", line.strip())
+    if len(clean_line) < 3:
+        return False
+    if clean_line.lower() in ("resume", "cv", "curriculum vitae"):
+        return False
+    if "@" in clean_line or PHONE_RE.search(clean_line) or re.search(r'https?://|www\.', clean_line, re.IGNORECASE):
+        return False
+    if re.search(r'\d', clean_line):
+        return False
+    if "," in clean_line and any(hint in clean_line.lower() for hint in LOCATION_HINTS):
+        return False
+    words = clean_line.split()
+    if len(words) < 2 or len(words) > 5:
+        return False
+    if sum(1 for w in words if re.search(r'[A-Za-z]', w)) != len(words):
+        return False
+    # Prefer title case or all-caps display names.
+    alpha_chars = [ch for ch in clean_line if ch.isalpha()]
+    if not alpha_chars:
+        return False
+    upper_ratio = sum(1 for ch in alpha_chars if ch.isupper()) / len(alpha_chars)
+    if upper_ratio >= 0.6:
+        return True
+    if clean_line == clean_line.title():
+        return True
+    return False
+
+
+def _pick_name_line(lines):
+    candidates = []
+    for idx, line in enumerate(lines[:10]):
+        if _looks_like_name_line(line):
+            score = 0
+            clean_line = line.strip()
+            if clean_line == clean_line.upper():
+                score += 3
+            if len(clean_line.split()) in (2, 3):
+                score += 2
+            if idx <= 3:
+                score += 1
+            if not any(hint in clean_line.lower() for hint in LOCATION_HINTS):
+                score += 2
+            candidates.append((score, clean_line))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: (-item[0], -len(item[1]), item[1]))
+    return candidates[0][1]
 
 
 def _find_section(lines, canonical_name):
@@ -87,20 +144,11 @@ def extract(path: str, source_id: str = None) -> SourceResult:
     non_empty_lines = [l for l in lines if l.strip()]
     evidence = []
 
-    # Name: heuristic — scan first few non-empty lines for the likely name
-    for line in non_empty_lines[:5]:
-        clean_line = line.strip()
-        # Skip obvious non-names
-        if (len(clean_line) < 3 or 
-            clean_line.lower() in ("resume", "cv", "curriculum vitae") or 
-            "@" in clean_line or 
-            PHONE_RE.search(clean_line) or 
-            re.search(r'\d', clean_line)): # Names rarely have numbers
-            continue
-            
-        evidence.append(Evidence("full_name", clean_line, clean_line, source_id, "unstructured",
+    # Name: look for the best candidate in the top of the document.
+    name_line = _pick_name_line(non_empty_lines)
+    if name_line:
+        evidence.append(Evidence("full_name", name_line, name_line, source_id, "unstructured",
                                  "heuristic:smart_first_line"))
-        break
 
     email_match = EMAIL_RE.search(text)
     if email_match:

@@ -26,6 +26,29 @@ PORTFOLIO_RE = re.compile(
 )
 
 
+def _compact(text: str) -> str:
+    return re.sub(r'\s+', '', text)
+
+
+def _normalize_linkedin_path(path: str) -> Optional[str]:
+    path = path.strip("/.,!?;:")
+    if not path:
+        return None
+
+    segments = [segment for segment in path.split("/") if segment]
+    if not segments:
+        return None
+
+    first = segments[0].casefold()
+    if first in {"in", "company", "jobs", "school", "feed", "search", "learning", "pulse", "posts", "events"}:
+        if first == "in" and len(segments) >= 2:
+            return f"https://linkedin.com/in/{segments[1]}"
+        return None
+
+    # Resume URLs often omit the /in/ segment and only carry the public identifier.
+    return f"https://linkedin.com/in/{segments[0]}"
+
+
 def discover_urls(texts: List[str]) -> Dict[str, Optional[str]]:
     """Scans a list of raw text blobs (one per source file) and returns
     the first LinkedIn, GitHub, and portfolio URL found.
@@ -38,10 +61,12 @@ def discover_urls(texts: List[str]) -> Dict[str, Optional[str]]:
         }
     """
     combined = "\n".join(texts)
+    compact = _compact(combined)
 
     linkedin = None
-    # Match full linkedin URL first
-    m = re.search(r'(?:https?://)?(?:www\.)?linkedin\.com/in/([\w\-%.]+)', combined, re.IGNORECASE)
+    # Match full linkedin URL first. PDFs often insert whitespace between
+    # the domain and path segments, so we also search a compacted copy.
+    m = re.search(r'(?:https?://)?(?:www\.)?linkedin\.com\s*/\s*in\s*/\s*([\w\-%.]+)', combined, re.IGNORECASE)
     if m:
         linkedin = "https://linkedin.com/in/" + m.group(1).rstrip("/.,!?;:")
     else:
@@ -49,10 +74,17 @@ def discover_urls(texts: List[str]) -> Dict[str, Optional[str]]:
         m = re.search(r'linkedin\s*[:/]\s*(?:in/)?([\w\-%.]+)', combined, re.IGNORECASE)
         if m:
             linkedin = "https://linkedin.com/in/" + m.group(1).rstrip("/.,!?;:")
+        else:
+            m = re.search(r'(?:https?://)?(?:www\.)?linkedin\.com\s*/\s*([A-Za-z0-9_.%-]+)', combined, re.IGNORECASE)
+            if m:
+                normalized = _normalize_linkedin_path(m.group(1))
+                if normalized:
+                    linkedin = normalized
 
     github = None
-    # Match full github URL first
-    m = re.search(r'(?:https?://)?(?:www\.)?github\.com/([\w\-%.]+)', combined, re.IGNORECASE)
+    # Match full github URL first. PDFs often insert whitespace between
+    # the domain and path segments, so we also search a compacted copy.
+    m = re.search(r'(?:https?://)?(?:www\.)?github\.com\s*/\s*([\w\-%.]+)', combined, re.IGNORECASE)
     if m:
         github = "https://github.com/" + m.group(1).rstrip("/.,!?;:")
     else:
@@ -60,6 +92,10 @@ def discover_urls(texts: List[str]) -> Dict[str, Optional[str]]:
         m = re.search(r'github\s*[:/]\s*@?([\w\-%.]+)', combined, re.IGNORECASE)
         if m:
             github = "https://github.com/" + m.group(1).rstrip("/.,!?;:")
+        else:
+            m = re.search(r'(?:https?://)?(?:www\.)?github\.com\s*/\s*([A-Za-z0-9_.%-]+)', combined, re.IGNORECASE)
+            if m:
+                github = "https://github.com/" + m.group(1).rstrip("/.,!?;:")
 
     portfolio = None
     # Portfolio: look for https:// or www.

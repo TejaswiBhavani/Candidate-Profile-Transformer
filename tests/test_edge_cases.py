@@ -44,6 +44,18 @@ class TestSourceRobustness(unittest.TestCase):
         self.assertEqual(_normalize_header("Exp erience"), "experience")
         self.assertEqual(_normalize_header("Edu cation:"), "education")
         self.assertEqual(_normalize_header("Hon ors & Awards"), "awards")
+        self.assertEqual(_normalize_header("TECHNNICAL SKILLS"), "skills")
+
+    def test_pdf_name_picker_skips_location_lines(self):
+        from eightfold.sources.pdf_source import _pick_name_line
+        lines = [
+            "EDUCATION",
+            "+91 8919546693",
+            "Hyderabad, Telangana, India",
+            "TEJASWI BHAVANI HARI",
+            "bhavanih1111@gmail.com",
+        ]
+        self.assertEqual(_pick_name_line(lines), "TEJASWI BHAVANI HARI")
 
 
 class TestOnMissingPolicies(unittest.TestCase):
@@ -84,6 +96,17 @@ class TestSinglySourcedField(unittest.TestCase):
         self.assertIn("SQL", skills)
         self.assertLess(skills["SQL"], 0.7)
         self.assertGreater(skills["SQL"], 0.0)
+
+
+class TestURLNormalization(unittest.TestCase):
+    def test_linkedin_url_without_in_segment_is_normalized(self):
+        from eightfold.url_discovery import discover_urls
+        urls = discover_urls([
+            "https://linkedIn.com/tejaswibhavnaih",
+            "https://github.com/TejaswiBhavani",
+        ])
+        self.assertEqual(urls["linkedin"], "https://linkedin.com/in/tejaswibhavnaih")
+        self.assertEqual(urls["github"], "https://github.com/TejaswiBhavani")
 
 
 if __name__ == "__main__":

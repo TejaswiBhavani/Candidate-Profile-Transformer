@@ -1,6 +1,15 @@
 import type { PipelineResponse } from './types'
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://127.0.0.1:8000'
+function getApiBase() {
+  const configuredBase = import.meta.env.VITE_API_BASE
+  if (configuredBase) {
+    return configuredBase
+  }
+
+  return import.meta.env.DEV ? 'http://127.0.0.1:8000' : window.location.origin
+}
+
+const API_BASE = getApiBase()
 
 export async function runPipeline(files: File[], configName: string = 'default'): Promise<PipelineResponse> {
   const formData = new FormData()
