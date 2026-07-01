@@ -65,6 +65,7 @@ NAME_BLACKLIST = {
     "extracirricular", "technical", "professional", "profile", "contact",
     "links", "link", "work", "internship", "internships", "achievements",
     "leadership", "languages", "languages & proficiency", "technical skills",
+    "additional information", "additional",
 }
 
 
