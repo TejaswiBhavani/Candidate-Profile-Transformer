@@ -93,24 +93,39 @@ def _looks_like_name_line(line):
 
 
 def _pick_name_line(lines):
-    candidates = []
-    for idx, line in enumerate(lines[:10]):
-        if _looks_like_name_line(line):
-            score = 0
-            clean_line = line.strip()
-            if clean_line == clean_line.upper():
-                score += 3
-            if len(clean_line.split()) in (2, 3):
-                score += 2
-            if idx <= 3:
-                score += 1
-            if not any(hint in clean_line.lower() for hint in LOCATION_HINTS):
-                score += 2
-            candidates.append((score, clean_line))
+    section_cutoff = len(lines)
+    for idx, line in enumerate(lines):
+        if _is_header_line(line):
+            section_cutoff = idx
+            break
+
+    def _collect(search_lines, position_bonus_base):
+        collected = []
+        for idx, line in enumerate(search_lines):
+            if _looks_like_name_line(line):
+                score = 0
+                clean_line = line.strip()
+                if clean_line == clean_line.upper():
+                    score += 3
+                if len(clean_line.split()) in (2, 3):
+                    score += 2
+                if idx <= 3:
+                    score += 1
+                if not any(hint in clean_line.lower() for hint in LOCATION_HINTS):
+                    score += 2
+                score += max(position_bonus_base - idx, 0)
+                collected.append((score, idx, clean_line))
+        return collected
+
+    candidates = _collect(lines[:section_cutoff], position_bonus_base=6)
+    if not candidates:
+        candidates = _collect(lines, position_bonus_base=3)
+
     if not candidates:
         return None
-    candidates.sort(key=lambda item: (-item[0], -len(item[1]), item[1]))
-    return candidates[0][1]
+
+    candidates.sort(key=lambda item: (-item[0], item[1], -len(item[2]), item[2]))
+    return candidates[0][2]
 
 
 def _find_section(lines, canonical_name):
