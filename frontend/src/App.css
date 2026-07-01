@@ -401,6 +401,12 @@ body {
 .confidence-value { font-size: 1.6rem; font-weight: 800; }
 .confidence-label { font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
 
+.confidence-label-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 /* ─── PROFILE GRID ─── */
 .profile-grid {
   display: grid;
@@ -514,6 +520,12 @@ body {
   color: #fff;
   font-size: 0.7rem;
   font-weight: 700;
+}
+
+.skill-confidence-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 /* ─── EXPERIENCE TIMELINE ─── */

@@ -1,5 +1,6 @@
 import { Envelope, Phone, MapPin } from './Icons'
 import type { ProfileOutput } from '../api/types'
+import { Tooltip } from './Tooltip'
 
 interface CandidateHeaderProps {
   profile: ProfileOutput
@@ -57,7 +58,10 @@ export function CandidateHeader({ profile }: CandidateHeaderProps) {
         <span className="confidence-value" style={{ color: confidenceColor }}>
           {Math.round(profile.overall_confidence * 100)}%
         </span>
-        <span className="confidence-label">Confidence</span>
+        <div className="confidence-label-row">
+          <span className="confidence-label">Confidence</span>
+          <Tooltip text="Overall confidence starts from the strongest source type involved, increases a little when multiple sources agree, and drops when a field is resolved despite conflicts. Structured sources score higher than semi-structured sources, which score higher than unstructured text." />
+        </div>
       </div>
     </div>
   )
